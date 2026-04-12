@@ -1,0 +1,19 @@
+---
+description: Cursor IDE + InariCode CLI — how they work together in this repo
+alwaysApply: true
+---
+
+# Cursor + InariCode (this repository)
+
+- **Cursor** — editor, Composer, inline AI, multi-file refactors.
+- **InariCode** — terminal CLI (`yarn cli` from repo root): Rust-sandboxed **engine**, **sessions**, **chat** with tools (`grep`, `apply_patch`, etc.).
+
+## Quick pointers
+
+1. Read **`docs/integrations/cursor.md`** for setup (terminal, rules, env, troubleshooting).
+2. Follow **`AGENTS.md`** for TypeScript, **`yarn lint`**, and **`yarn verify`** before finishing a change.
+3. For CLI work, use **`yarn cli doctor`**, **`yarn cli chat`**, not a global **`inari`** unless you **`yarn link`** in `packages/cli`.
+
+## MCP
+
+A future **MCP** bridge from InariCode → Cursor is **planned** (see **`docs/plan/inari-code-plan.md`**). Until then, use the **integrated terminal** for `inari`.

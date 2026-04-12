@@ -17,6 +17,10 @@
 
 UI strings: **English** and **Mongolian** (`locale` / `INARI_LANG`).
 
+## Cursor IDE
+
+Developing **in** Cursor? See **[`docs/integrations/cursor.md`](docs/integrations/cursor.md)** for project rules (`.cursor/rules/`), **`AGENTS.md`**, terminal **`yarn cli`**, and how InariCode complements the editor. A future **MCP** link is on the [plan](docs/plan/inari-code-plan.md).
+
 ## Requirements
 
 | Component | Notes |

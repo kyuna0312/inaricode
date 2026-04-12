@@ -201,6 +201,7 @@ export async function writeExampleConfig(cwd: string, locale: Locale = "en"): Pr
   const body = `// InariCode — API keys via env or apiKey below
 // Release tag: packages/cli/package.json → version (semver), patch is the third number,
 //   flower name: optional inaricode.codename, else derived from version (see src/release-flowers.ts).
+// Cursor IDE: docs/integrations/cursor.md (project rules, terminal, roadmap MCP).
 ${langLine}// Providers:
 //   anthropic     → ANTHROPIC_API_KEY
 //   openai        → OPENAI_API_KEY (ChatGPT)

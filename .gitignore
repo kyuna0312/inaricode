@@ -1,4 +1,7 @@
-.cursor/
+# Cursor: keep shared project rules; ignore local plans / state
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 
 .turbo/
 node_modules/

@@ -2,6 +2,10 @@
 
 Short rules aligned with common **Linux / OSS** CLI practice (predictable tooling, strict types, CI parity).
 
+## Cursor IDE
+
+- Integration guide: **`docs/integrations/cursor.md`**. Shared rules live in **`.cursor/rules/`** (versioned); use **`yarn cli`** in Cursor’s terminal from the repo root.
+
 ## Release version line
 
 - **`packages/cli/package.json`**: `version` is **semver** (`major.minor.patch`). The **patch** is the third number and is shown in the CLI banner.
