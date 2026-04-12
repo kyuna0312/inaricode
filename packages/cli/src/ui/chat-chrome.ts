@@ -2,6 +2,8 @@ import { homedir } from "node:os";
 import type { Locale } from "../i18n/locale.js";
 import { tr } from "../i18n/strings.js";
 
+export type ChatThemeId = "default" | "soft" | "high_contrast";
+
 export type ChatSessionContext = {
   locale: Locale;
   /** Full line from `cliVersionLine()` (semver · patch · flower). */
@@ -16,6 +18,8 @@ export type ChatSessionContext = {
   plain: boolean;
   /** Git branch under workspace, if any. */
   gitBranch: string | null;
+  /** REPL palette from config (`chatTheme`). */
+  chatTheme: ChatThemeId;
 };
 
 function ansiBase(): boolean {
@@ -29,17 +33,47 @@ export function useChatAnsi(plain: boolean): boolean {
   return ansiBase();
 }
 
-const S = {
-  reset: "\x1b[0m",
-  bold: "\x1b[1m",
-  dim: "\x1b[2m",
-  fgMuted: "\x1b[38;5;245m",
-  fgLine: "\x1b[38;5;238m",
-  fgYou: "\x1b[38;5;73m",
-  fgAssistant: "\x1b[38;5;252m",
+type Palette = {
+  reset: string;
+  bold: string;
+  dim: string;
+  fgMuted: string;
+  fgLine: string;
+  fgYou: string;
+  fgAssistant: string;
 };
 
-function z(use: boolean): typeof S {
+const PALETTES: Record<ChatThemeId, Palette> = {
+  default: {
+    reset: "\x1b[0m",
+    bold: "\x1b[1m",
+    dim: "\x1b[2m",
+    fgMuted: "\x1b[38;5;245m",
+    fgLine: "\x1b[38;5;238m",
+    fgYou: "\x1b[38;5;73m",
+    fgAssistant: "\x1b[38;5;252m",
+  },
+  soft: {
+    reset: "\x1b[0m",
+    bold: "\x1b[1m",
+    dim: "\x1b[2m",
+    fgMuted: "\x1b[38;5;244m",
+    fgLine: "\x1b[38;5;240m",
+    fgYou: "\x1b[38;5;109m",
+    fgAssistant: "\x1b[38;5;250m",
+  },
+  high_contrast: {
+    reset: "\x1b[0m",
+    bold: "\x1b[1m",
+    dim: "\x1b[2m",
+    fgMuted: "\x1b[90m",
+    fgLine: "\x1b[37m",
+    fgYou: "\x1b[96m",
+    fgAssistant: "\x1b[97m",
+  },
+};
+
+function palette(theme: ChatThemeId, use: boolean): Palette {
   if (!use) {
     return {
       reset: "",
@@ -51,7 +85,7 @@ function z(use: boolean): typeof S {
       fgAssistant: "",
     };
   }
-  return S;
+  return PALETTES[theme] ?? PALETTES.default;
 }
 
 /** Tilde-abbreviate home directory for display. */
@@ -67,31 +101,31 @@ export function shortenPath(absPath: string): string {
   return absPath;
 }
 
-export function replPrompt(plain: boolean): string {
-  const c = z(useChatAnsi(plain));
+export function replPrompt(plain: boolean, theme: ChatThemeId = "default"): string {
+  const c = palette(theme, useChatAnsi(plain));
   return `\n${c.fgMuted}›${c.reset} `;
 }
 
-export function replTurnSeparator(plain: boolean): string {
-  const c = z(useChatAnsi(plain));
+export function replTurnSeparator(plain: boolean, theme: ChatThemeId = "default"): string {
+  const c = palette(theme, useChatAnsi(plain));
   const w = Math.min(44, Math.max(32, (process.stdout.columns ?? 56) - 4));
   return `${c.dim}${c.fgLine}${"─".repeat(w)}${c.reset}\n`;
 }
 
-export function replAssistantLead(plain: boolean): string {
-  const c = z(useChatAnsi(plain));
+export function replAssistantLead(plain: boolean, theme: ChatThemeId = "default"): string {
+  const c = palette(theme, useChatAnsi(plain));
   return `\n${c.dim}${c.fgAssistant}assistant${c.reset}\n`;
 }
 
-export function replUserBlock(locale: Locale, line: string, plain: boolean): string {
-  const c = z(useChatAnsi(plain));
+export function replUserBlock(locale: Locale, line: string, plain: boolean, theme: ChatThemeId = "default"): string {
+  const c = palette(theme, useChatAnsi(plain));
   const you = tr(locale, "chatReplYou");
   return `\n${c.fgYou}${c.bold}${you}${c.reset} ${c.dim}›${c.reset} ${line}\n`;
 }
 
 /** Full welcome block for readline chat (no mascot ASCII). */
 export function formatReplSessionWelcome(ctx: ChatSessionContext): string {
-  const c = z(useChatAnsi(ctx.plain));
+  const c = palette(ctx.chatTheme, useChatAnsi(ctx.plain));
   const L = ctx.locale;
   const pathDisp = shortenPath(ctx.workspaceRoot);
   const badges: string[] = [];
@@ -125,6 +159,14 @@ export type TuiChromeLines = {
   badges: string;
   hint: string;
 };
+
+/** Ink accent for busy / prompts (matches `chatTheme` when not plain). */
+export function tuiAccentColor(theme: ChatThemeId, plain: boolean): "cyan" | "blue" | "magenta" | "gray" {
+  if (plain) return "gray";
+  if (theme === "high_contrast") return "magenta";
+  if (theme === "soft") return "blue";
+  return "cyan";
+}
 
 export function buildTuiChromeLines(ctx: ChatSessionContext): TuiChromeLines {
   const L = ctx.locale;

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { flowerForSemver, parseSemverParts } from "./release-flowers.js";
@@ -11,9 +11,31 @@ type InariCliPackageJson = {
 let cachedSemver: string | null = null;
 let cachedPkg: InariCliPackageJson | null = null;
 
+/** Root of `@inaricode/cli` on disk (`package.json` directory). */
+export function cliPackageRootDir(): string {
+  const distDir = dirname(fileURLToPath(import.meta.url));
+  return join(distDir, "..");
+}
+
+/**
+ * Monorepo checkout: `packages/skills/examples` beside `packages/cli`.
+ * Omitted from the published npm package — returns `null` for normal installs.
+ */
+export function resolveBundledSkillsExamplesDir(): string | null {
+  const candidate = join(cliPackageRootDir(), "..", "skills", "examples");
+  try {
+    if (existsSync(candidate) && statSync(candidate).isDirectory()) {
+      return candidate;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 function readCliPackageJson(): InariCliPackageJson {
   if (cachedPkg) return cachedPkg;
-  const p = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+  const p = join(cliPackageRootDir(), "package.json");
   cachedPkg = JSON.parse(readFileSync(p, "utf8")) as InariCliPackageJson;
   return cachedPkg;
 }

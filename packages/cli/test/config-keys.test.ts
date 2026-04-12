@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadConfig } from "../src/config.js";
+import { loadConfig, loadRawInariConfig } from "../src/config.js";
 
 describe("config keys (inaricode.yaml)", () => {
   afterEach(() => {
@@ -46,6 +46,24 @@ keys:
       );
       const cfg = await loadConfig(dir);
       expect(cfg.apiKey).toBe("sk-top");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects plugins.enabled: true (Phase 8 placeholder)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "inari-plugins-"));
+    try {
+      writeFileSync(
+        join(dir, "inaricode.yaml"),
+        `provider: anthropic
+apiKey: sk-test
+plugins:
+  enabled: true
+`,
+        "utf8",
+      );
+      await expect(loadRawInariConfig(dir)).rejects.toThrow(/plugins\.enabled/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

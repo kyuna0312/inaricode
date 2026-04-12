@@ -5,7 +5,7 @@ import { z } from "zod";
 import { resolveShellPolicy, type ResolvedShellPolicy } from "./policy/shell.js";
 import { resolveSidecarArgv } from "./sidecar/resolve.js";
 import type { EmbeddingClient } from "./tools/embeddings-api.js";
-import { INARICODE_CONFIG_SEARCH_PLACES } from "./config-paths.js";
+import { inaricodeConfigSearchPlaces, INARICODE_CONFIG_SEARCH_PLACES } from "./config-paths.js";
 import { localeFromEnv, type Locale } from "./i18n/locale.js";
 
 export { INARICODE_CONFIG_SEARCH_PLACES };
@@ -162,6 +162,20 @@ const RawConfigSchema = z
      * Example: `provider: openai` + `keys: { openai: "sk-..." }`.
      */
     keys: z.record(z.string(), z.string()).optional(),
+    /** Declarative skill packs (YAML + Markdown); see packages/skills and docs/skills.md */
+    skills: z
+      .object({
+        packs: z.array(z.string().min(1)).optional().default([]),
+      })
+      .optional(),
+    /** REPL ANSI palette; TUI uses related Ink accents when not plain */
+    chatTheme: z.enum(["default", "soft", "high_contrast"]).optional().default("default"),
+    /** Phase 8 — reserved; execution not implemented (see docs/plugins-threat-model.md) */
+    plugins: z
+      .object({
+        enabled: z.boolean().optional().default(false),
+      })
+      .optional(),
   })
   .superRefine((val, ctx) => {
     if (val.provider === "custom" && !val.baseURL) {
@@ -169,6 +183,14 @@ const RawConfigSchema = z
         code: z.ZodIssueCode.custom,
         message: 'provider "custom" requires baseURL in config',
         path: ["baseURL"],
+      });
+    }
+    if (val.plugins?.enabled) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "plugins.enabled is not implemented (Phase 8). Remove or set false. See docs/plugins-threat-model.md",
+        path: ["plugins", "enabled"],
       });
     }
   });
@@ -201,9 +223,13 @@ export type InariConfig = {
     fzfPath: string;
     defaultFileGlob: string;
   };
+  /** Relative or absolute paths to skill pack dirs (skill.yaml + prompt). */
+  skillPackPaths: string[];
+  chatTheme: "default" | "soft" | "high_contrast";
 };
 
 export type InariInitConfigFormat = "yaml" | "cjs";
+export type InariInitTemplate = "default" | "beginner";
 
 async function writeExampleCjsConfig(cwd: string, locale: Locale): Promise<string> {
   const path = join(cwd, "inaricode.config.cjs");
@@ -310,6 +336,72 @@ keys:
 #   mode: builtin
 #   fzfPath: fzf
 #   defaultFileGlob: "**/*"
+#
+# Phase 6 — declarative skills (optional): point packs at folders with skill.yaml + prompt.md
+# skills:
+#   packs:
+#     - ./path/to/my-skill
+#
+# REPL ANSI theme: default | soft | high_contrast
+# chatTheme: default
+`;
+  await writeFile(path, body, "utf8");
+  return path;
+}
+
+async function writeBeginnerYamlConfig(cwd: string, locale: Locale): Promise<string> {
+  const path = join(cwd, "inaricode.yaml");
+  const langLine =
+    locale === "mn"
+      ? "# Хэл: locale: mn эсвэл INARI_LANG=mn — CLI, doctor, chat.\n"
+      : "# Language: locale: mn or INARI_LANG=mn for Mongolian UI (CLI, doctor, chat).\n";
+  const body = `# InariCode — beginner template: read-only chat + softer REPL colors + shorter agent steps.
+# Add API keys under keys: (or env). Docs: README, docs/skills.md, packages/skills/README.md
+${langLine}# Try: inari skills list   |   inari doctor   |   inari chat (tools are read-only until you change readOnly)
+
+provider: anthropic
+model: claude-sonnet-4-20250514
+locale: ${locale}
+
+maxAgentSteps: 18
+streaming: true
+readOnly: true
+maxHistoryItems: 80
+chatTheme: soft
+
+keys:
+  anthropic: ""
+  openai: ""
+
+# When you are ready for edits + shell tools, set readOnly: false and raise maxAgentSteps if needed.
+
+# Example skill pack (optional) — use a path to a folder containing skill.yaml:
+# skills:
+#   packs:
+#     - ./packages/skills/examples/minimal-review
+`;
+  await writeFile(path, body, "utf8");
+  return path;
+}
+
+async function writeBeginnerCjsConfig(cwd: string, locale: Locale): Promise<string> {
+  const path = join(cwd, "inaricode.config.cjs");
+  const langLine =
+    locale === "mn"
+      ? `// Хэл: locale: 'mn' эсвэл INARI_LANG=mn\n`
+      : `// Language: locale: 'mn' or INARI_LANG=mn\n`;
+  const body = `// InariCode — beginner template (read-only, softer chat theme). See docs/skills.md for skill packs.
+${langLine}module.exports = {
+  provider: 'anthropic',
+  model: 'claude-sonnet-4-20250514',
+  locale: '${locale}',
+  maxAgentSteps: 18,
+  streaming: true,
+  readOnly: true,
+  maxHistoryItems: 80,
+  chatTheme: 'soft',
+  // skills: { packs: ['./packages/skills/examples/minimal-review'] },
+};
 `;
   await writeFile(path, body, "utf8");
   return path;
@@ -320,7 +412,11 @@ export async function writeExampleInariConfig(
   cwd: string,
   locale: Locale = "en",
   format: InariInitConfigFormat = "yaml",
+  template: InariInitTemplate = "default",
 ): Promise<string> {
+  if (template === "beginner") {
+    return format === "cjs" ? writeBeginnerCjsConfig(cwd, locale) : writeBeginnerYamlConfig(cwd, locale);
+  }
   return format === "cjs" ? writeExampleCjsConfig(cwd, locale) : writeExampleYamlConfig(cwd, locale);
 }
 
@@ -378,6 +474,10 @@ function applyKeysMapToApiKey(c: RawInariConfig): RawInariConfig {
   return c;
 }
 
+function skillPackPathsFromParsed(c: z.infer<typeof RawConfigSchema>): string[] {
+  return c.skills?.packs ?? [];
+}
+
 function pickerFromParsed(c: z.infer<typeof RawConfigSchema>): InariConfig["picker"] {
   const p = c.picker;
   return {
@@ -390,7 +490,7 @@ function pickerFromParsed(c: z.infer<typeof RawConfigSchema>): InariConfig["pick
 /** Picker only — no API keys required (for `inari pick`). */
 export async function loadPickerSettings(searchFrom: string): Promise<InariConfig["picker"]> {
   const explorer = cosmiconfig("inaricode", {
-    searchPlaces: [...INARICODE_CONFIG_SEARCH_PLACES],
+    searchPlaces: inaricodeConfigSearchPlaces(),
   });
   const found = await explorer.search(searchFrom);
   const raw = (found?.config ?? {}) as Record<string, unknown>;
@@ -435,10 +535,28 @@ function embeddingsFromParsed(
   return { client: { baseURL, apiKey, model } };
 }
 
+/** For `inari doctor` — chat session limits from config (no API key required). */
+export async function loadDoctorChatHints(searchFrom: string): Promise<{
+  maxHistoryItems: number;
+  maxAgentSteps: number;
+} | null> {
+  const explorer = cosmiconfig("inaricode", {
+    searchPlaces: inaricodeConfigSearchPlaces(),
+  });
+  const found = await explorer.search(searchFrom);
+  const raw = (found?.config ?? {}) as Record<string, unknown>;
+  const parsed = RawConfigSchema.safeParse(raw);
+  if (!parsed.success) {
+    return null;
+  }
+  const c = parsed.data;
+  return { maxHistoryItems: c.maxHistoryItems, maxAgentSteps: c.maxAgentSteps };
+}
+
 /** For `inari doctor` without loading API keys — reads only `sidecar` from config. */
 export async function loadSidecarDoctorInfo(searchFrom: string): Promise<InariConfig["sidecar"]> {
   const explorer = cosmiconfig("inaricode", {
-    searchPlaces: [...INARICODE_CONFIG_SEARCH_PLACES],
+    searchPlaces: inaricodeConfigSearchPlaces(),
   });
   const found = await explorer.search(searchFrom);
   const raw = (found?.config ?? {}) as Record<string, unknown>;
@@ -452,7 +570,7 @@ export async function loadSidecarDoctorInfo(searchFrom: string): Promise<InariCo
 /** Load and validate raw config from disk (no env/CLI overrides). */
 export async function loadRawInariConfig(searchFrom: string): Promise<RawInariConfig> {
   const explorer = cosmiconfig("inaricode", {
-    searchPlaces: [...INARICODE_CONFIG_SEARCH_PLACES],
+    searchPlaces: inaricodeConfigSearchPlaces(),
   });
   const found = await explorer.search(searchFrom);
   const raw = (found?.config ?? {}) as Record<string, unknown>;
@@ -530,6 +648,8 @@ export function resolveConfigFromRaw(c: RawInariConfig): InariConfig {
       embeddings,
       locale: resolvedLocale(c),
       picker,
+      skillPackPaths: skillPackPathsFromParsed(c),
+      chatTheme: c.chatTheme,
     };
   }
 
@@ -566,6 +686,8 @@ export function resolveConfigFromRaw(c: RawInariConfig): InariConfig {
     embeddings,
     locale: resolvedLocale(c),
     picker,
+    skillPackPaths: skillPackPathsFromParsed(c),
+    chatTheme: c.chatTheme,
   };
 }
 

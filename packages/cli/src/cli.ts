@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 import { Command, Option } from "commander";
-import { loadConfig, loadSidecarDoctorInfo, writeExampleInariConfig } from "./config.js";
+import {
+  loadConfig,
+  loadDoctorChatHints,
+  loadSidecarDoctorInfo,
+  writeExampleInariConfig,
+  type InariInitTemplate,
+} from "./config.js";
 import { engineRequest, resolveEngineBinary, resolveEngineTransport } from "./engine/client.js";
 import { sidecarRpc } from "./sidecar/client.js";
 import { pingEmbeddings } from "./tools/embeddings-api.js";
-import { cliVersionLine } from "./pkg-meta.js";
+import { cliVersionLine, resolveBundledSkillsExamplesDir } from "./pkg-meta.js";
 import {
   inariHelpPreamble,
   inariLogoBannerFull,
@@ -14,6 +20,13 @@ import { loadLocalePreference, type Locale } from "./i18n/locale.js";
 import { tr, type MessageKey } from "./i18n/strings.js";
 import { registerCursorCommand } from "./cursor-api/run-cursor-cli.js";
 import { registerProvidersCommand } from "./providers/run-providers-cli.js";
+import { registerSkillsCommand } from "./skills/run-skills-cli.js";
+import { registerMcpCommand } from "./mcp/run-mcp-cli.js";
+import { inariProfileFromEnv } from "./config-paths.js";
+import { resolveWorkspaceRoot } from "./workspace-root.js";
+import { loadSkillPackPathsFromConfig } from "./skills/read-pack-config.js";
+import { resolveSkillsContext } from "./skills/resolve-context.js";
+import { knownChatToolNames } from "./llm/inari-tools.js";
 
 const versionLine = cliVersionLine();
 
@@ -59,8 +72,11 @@ async function main(): Promise<void> {
     .addOption(
       new Option("--format <fmt>", L("optInitFormat")).choices(["yaml", "cjs"] as const).default("yaml"),
     )
-    .action(async (opts: { format: "yaml" | "cjs" }) => {
-      const p = await writeExampleInariConfig(cwd, locale, opts.format);
+    .addOption(
+      new Option("--template <name>", L("optInitTemplate")).choices(["default", "beginner"] as const).default("default"),
+    )
+    .action(async (opts: { format: "yaml" | "cjs"; template: InariInitTemplate }) => {
+      const p = await writeExampleInariConfig(cwd, locale, opts.format, opts.template);
       process.stdout.write(`${L("initWrote", { path: p })}\n`);
     });
 
@@ -123,10 +139,52 @@ async function main(): Promise<void> {
       } catch {
         process.stdout.write(`${L("doctorEmbeddingsSkipped")}\n`);
       }
+      const skillsEx = resolveBundledSkillsExamplesDir();
+      if (skillsEx) {
+        process.stdout.write(`${L("doctorSkillsExamplesAt", { path: skillsEx })}\n`);
+      } else {
+        process.stdout.write(`${L("doctorSkillsExamplesNone")}\n`);
+      }
+      const chatHints = await loadDoctorChatHints(process.cwd());
+      if (chatHints) {
+        process.stdout.write(
+          `${L("doctorChatSession", {
+            maxHistory: String(chatHints.maxHistoryItems),
+            maxSteps: String(chatHints.maxAgentSteps),
+          })}\n`,
+        );
+      }
+      const profile = inariProfileFromEnv();
+      if (profile) {
+        process.stdout.write(`${L("doctorConfigProfile", { profile })}\n`);
+      }
+      const skillPaths = await loadSkillPackPathsFromConfig(process.cwd());
+      if (skillPaths.length === 0) {
+        process.stdout.write(`${L("doctorSkillsNone")}\n`);
+      } else {
+        const known = knownChatToolNames({
+          readOnly: false,
+          includeCodebaseSearch: true,
+          includeSemanticSearch: true,
+        });
+        const sc = await resolveSkillsContext(process.cwd(), skillPaths, known);
+        if (sc.packs.length > 0) {
+          const ids = sc.packs.map((p) => p.manifest.id).join(", ");
+          process.stdout.write(`${L("doctorSkillsActive", { ids, count: String(sc.packs.length) })}\n`);
+        }
+        for (const iss of sc.issues) {
+          process.stderr.write(`${L("doctorSkillsLoadIssue", { detail: `${iss.path}: ${iss.message}` })}\n`);
+          if (skillPaths.includes(iss.path) || iss.path === "(skills)") {
+            process.exitCode = 1;
+          }
+        }
+      }
     });
 
   registerCursorCommand(program, L);
   registerProvidersCommand(program, L);
+  registerSkillsCommand(program, L);
+  registerMcpCommand(program, L);
 
   const media = program.command("media").description(L("cmdMedia"));
   media
@@ -163,7 +221,6 @@ async function main(): Promise<void> {
     .option("--picker <mode>", L("optPicker"))
     .action(
       async (opts: { root: string; glob?: string; picker?: string }) => {
-        const { resolveWorkspaceRoot } = await import("./ui/chat-repl.js");
         const { runPick } = await import("./pick/run-pick.js");
         const workspaceRoot = resolveWorkspaceRoot(opts.root || undefined, cwd);
         let picker: "builtin" | "fzf" | undefined;
@@ -213,7 +270,6 @@ async function main(): Promise<void> {
         provider?: string;
         model?: string;
       }) => {
-        const { resolveWorkspaceRoot } = await import("./ui/chat-repl.js");
         const workspaceRoot = resolveWorkspaceRoot(opts.root || undefined, cwd);
         const common = {
           cwd,

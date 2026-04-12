@@ -5,6 +5,11 @@
     "codename": "Sakura"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kyuna0312/inaricode.git",
+    "directory": "packages/cli"
+  },
   "description": "InariCode CLI — AI coding assistant driver",
   "type": "module",
   "bin": {
@@ -16,6 +21,8 @@
   ],
   "scripts": {
     "build": "tsc",
+    "lint": "eslint --config ../../eslint.config.mjs \"src/**/*.{ts,tsx}\" \"test/**/*.ts\" --max-warnings 0 --cache --cache-location ../../node_modules/.cache/eslint",
+    "prepublishOnly": "tsc",
     "test": "vitest run"
   },
   "dependencies": {
@@ -29,6 +36,8 @@
     "js-yaml": "^4.1.1",
     "openai": "^4.77.0",
     "react": "^18.3.1",
+    "tree-sitter": "^0.21.1",
+    "tree-sitter-typescript": "^0.23.2",
     "zod": "^3.24.2"
   },
   "devDependencies": {

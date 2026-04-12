@@ -1,5 +1,5 @@
 import { cosmiconfig } from "cosmiconfig";
-import { INARICODE_CONFIG_SEARCH_PLACES } from "../config-paths.js";
+import { inaricodeConfigSearchPlaces } from "../config-paths.js";
 
 export type Locale = "en" | "mn";
 
@@ -24,7 +24,7 @@ export async function loadLocalePreference(searchFrom: string): Promise<Locale> 
   if (env) return env;
   try {
     const explorer = cosmiconfig("inaricode", {
-      searchPlaces: [...INARICODE_CONFIG_SEARCH_PLACES],
+      searchPlaces: inaricodeConfigSearchPlaces(),
     });
     const found = await explorer.search(searchFrom);
     const raw = found?.config as { locale?: string } | undefined;

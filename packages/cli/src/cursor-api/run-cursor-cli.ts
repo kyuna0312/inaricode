@@ -2,29 +2,29 @@ import type { Command } from "commander";
 import { cursorApiJson, cursorApiKey } from "./http.js";
 import type { MessageKey } from "../i18n/strings.js";
 
-type L = (key: MessageKey, vars?: Record<string, string>) => string;
+type TranslateFn = (key: MessageKey, vars?: Record<string, string>) => string;
 
 function printJson(data: unknown): void {
   process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
 }
 
 /** Register `inari cursor …` (Cursor Cloud Agents API). */
-export function registerCursorCommand(program: Command, L: L): void {
-  const cur = program.command("cursor").description(L("cmdCursor"));
+export function registerCursorCommand(program: Command, tr: TranslateFn): void {
+  const cur = program.command("cursor").description(tr("cmdCursor"));
 
   cur
     .command("me")
     .description("Verify API key (GET /v0/me)")
     .action(async () => {
       if (!cursorApiKey()) {
-        process.stderr.write(`${L("cursorKeyMissing")}\n`);
+        process.stderr.write(`${tr("cursorKeyMissing")}\n`);
         process.exitCode = 1;
         return;
       }
       try {
         printJson(await cursorApiJson("/v0/me"));
       } catch (e) {
-        process.stderr.write(`${L("cursorApiFail", { detail: String(e) })}\n`);
+        process.stderr.write(`${tr("cursorApiFail", { detail: String(e) })}\n`);
         process.exitCode = 1;
       }
     });
@@ -38,7 +38,7 @@ export function registerCursorCommand(program: Command, L: L): void {
     .action(
       async (opts: { limit: string; cursor?: string; prUrl?: string }) => {
         if (!cursorApiKey()) {
-          process.stderr.write(`${L("cursorKeyMissing")}\n`);
+          process.stderr.write(`${tr("cursorKeyMissing")}\n`);
           process.exitCode = 1;
           return;
         }
@@ -49,7 +49,7 @@ export function registerCursorCommand(program: Command, L: L): void {
         try {
           printJson(await cursorApiJson(`/v0/agents?${q.toString()}`));
         } catch (e) {
-          process.stderr.write(`${L("cursorApiFail", { detail: String(e) })}\n`);
+          process.stderr.write(`${tr("cursorApiFail", { detail: String(e) })}\n`);
           process.exitCode = 1;
         }
       },
@@ -61,14 +61,14 @@ export function registerCursorCommand(program: Command, L: L): void {
     .argument("<id>", "Agent id, e.g. bc_abc123")
     .action(async (id: string) => {
       if (!cursorApiKey()) {
-        process.stderr.write(`${L("cursorKeyMissing")}\n`);
+        process.stderr.write(`${tr("cursorKeyMissing")}\n`);
         process.exitCode = 1;
         return;
       }
       try {
         printJson(await cursorApiJson(`/v0/agents/${encodeURIComponent(id)}`));
       } catch (e) {
-        process.stderr.write(`${L("cursorApiFail", { detail: String(e) })}\n`);
+        process.stderr.write(`${tr("cursorApiFail", { detail: String(e) })}\n`);
         process.exitCode = 1;
       }
     });
@@ -79,14 +79,14 @@ export function registerCursorCommand(program: Command, L: L): void {
     .argument("<id>", "Agent id")
     .action(async (id: string) => {
       if (!cursorApiKey()) {
-        process.stderr.write(`${L("cursorKeyMissing")}\n`);
+        process.stderr.write(`${tr("cursorKeyMissing")}\n`);
         process.exitCode = 1;
         return;
       }
       try {
         printJson(await cursorApiJson(`/v0/agents/${encodeURIComponent(id)}/conversation`));
       } catch (e) {
-        process.stderr.write(`${L("cursorApiFail", { detail: String(e) })}\n`);
+        process.stderr.write(`${tr("cursorApiFail", { detail: String(e) })}\n`);
         process.exitCode = 1;
       }
     });
@@ -96,14 +96,14 @@ export function registerCursorCommand(program: Command, L: L): void {
     .description("List model ids for launch (GET /v0/models)")
     .action(async () => {
       if (!cursorApiKey()) {
-        process.stderr.write(`${L("cursorKeyMissing")}\n`);
+        process.stderr.write(`${tr("cursorKeyMissing")}\n`);
         process.exitCode = 1;
         return;
       }
       try {
         printJson(await cursorApiJson("/v0/models"));
       } catch (e) {
-        process.stderr.write(`${L("cursorApiFail", { detail: String(e) })}\n`);
+        process.stderr.write(`${tr("cursorApiFail", { detail: String(e) })}\n`);
         process.exitCode = 1;
       }
     });
@@ -112,16 +112,16 @@ export function registerCursorCommand(program: Command, L: L): void {
     .command("repos")
     .description("List GitHub repos visible to the key (GET /v0/repositories; heavily rate-limited)")
     .action(async () => {
-      process.stderr.write(`${L("cursorReposWarn")}\n`);
+      process.stderr.write(`${tr("cursorReposWarn")}\n`);
       if (!cursorApiKey()) {
-        process.stderr.write(`${L("cursorKeyMissing")}\n`);
+        process.stderr.write(`${tr("cursorKeyMissing")}\n`);
         process.exitCode = 1;
         return;
       }
       try {
         printJson(await cursorApiJson("/v0/repositories"));
       } catch (e) {
-        process.stderr.write(`${L("cursorApiFail", { detail: String(e) })}\n`);
+        process.stderr.write(`${tr("cursorApiFail", { detail: String(e) })}\n`);
         process.exitCode = 1;
       }
     });
@@ -145,7 +145,7 @@ export function registerCursorCommand(program: Command, L: L): void {
         branchName?: string;
       }) => {
         if (!cursorApiKey()) {
-          process.stderr.write(`${L("cursorKeyMissing")}\n`);
+          process.stderr.write(`${tr("cursorKeyMissing")}\n`);
           process.exitCode = 1;
           return;
         }
@@ -167,7 +167,7 @@ export function registerCursorCommand(program: Command, L: L): void {
             }),
           );
         } catch (e) {
-          process.stderr.write(`${L("cursorApiFail", { detail: String(e) })}\n`);
+          process.stderr.write(`${tr("cursorApiFail", { detail: String(e) })}\n`);
           process.exitCode = 1;
         }
       },
@@ -180,7 +180,7 @@ export function registerCursorCommand(program: Command, L: L): void {
     .requiredOption("--prompt <text>", "Follow-up instruction")
     .action(async (id: string, opts: { prompt: string }) => {
       if (!cursorApiKey()) {
-        process.stderr.write(`${L("cursorKeyMissing")}\n`);
+        process.stderr.write(`${tr("cursorKeyMissing")}\n`);
         process.exitCode = 1;
         return;
       }
@@ -192,7 +192,7 @@ export function registerCursorCommand(program: Command, L: L): void {
           }),
         );
       } catch (e) {
-        process.stderr.write(`${L("cursorApiFail", { detail: String(e) })}\n`);
+        process.stderr.write(`${tr("cursorApiFail", { detail: String(e) })}\n`);
         process.exitCode = 1;
       }
     });
@@ -203,7 +203,7 @@ export function registerCursorCommand(program: Command, L: L): void {
     .argument("<id>", "Agent id")
     .action(async (id: string) => {
       if (!cursorApiKey()) {
-        process.stderr.write(`${L("cursorKeyMissing")}\n`);
+        process.stderr.write(`${tr("cursorKeyMissing")}\n`);
         process.exitCode = 1;
         return;
       }
@@ -214,7 +214,7 @@ export function registerCursorCommand(program: Command, L: L): void {
           }),
         );
       } catch (e) {
-        process.stderr.write(`${L("cursorApiFail", { detail: String(e) })}\n`);
+        process.stderr.write(`${tr("cursorApiFail", { detail: String(e) })}\n`);
         process.exitCode = 1;
       }
     });
@@ -225,7 +225,7 @@ export function registerCursorCommand(program: Command, L: L): void {
     .argument("<id>", "Agent id")
     .action(async (id: string) => {
       if (!cursorApiKey()) {
-        process.stderr.write(`${L("cursorKeyMissing")}\n`);
+        process.stderr.write(`${tr("cursorKeyMissing")}\n`);
         process.exitCode = 1;
         return;
       }
@@ -236,7 +236,7 @@ export function registerCursorCommand(program: Command, L: L): void {
           }),
         );
       } catch (e) {
-        process.stderr.write(`${L("cursorApiFail", { detail: String(e) })}\n`);
+        process.stderr.write(`${tr("cursorApiFail", { detail: String(e) })}\n`);
         process.exitCode = 1;
       }
     });

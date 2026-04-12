@@ -14,6 +14,17 @@ class Local {}
     expect(names).toContain("bar");
   });
 
+  it("finds TS class methods via tree-sitter", () => {
+    const src = `class Box {
+  getArea(): number { return 1; }
+}
+`;
+    const { symbols } = extractSymbolOutline("shape.ts", src);
+    const names = symbols.map((s) => s.name);
+    expect(names).toContain("Box");
+    expect(names).toContain("getArea");
+  });
+
   it("finds Python defs", () => {
     const src = "async def handle():\n  pass\nclass Box:\n  pass\n";
     const { symbols } = extractSymbolOutline("m.py", src);

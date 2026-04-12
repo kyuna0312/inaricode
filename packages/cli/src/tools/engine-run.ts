@@ -203,7 +203,7 @@ async function runEngineToolInner(params: {
       !skipConfirm &&
       !(await confirm({
         title: "apply_patch",
-        body: `${p.path}\n---\n${truncate(p.unified_diff, 4000)}`,
+        body: `${p.path}\n---\n(unified diff preview)\n${truncate(p.unified_diff, 4000)}`,
       }))
     ) {
       return "User declined apply_patch.";

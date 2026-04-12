@@ -3,7 +3,8 @@ import { stdin as input, stdout as output } from "node:process";
 import { resolve } from "node:path";
 import { loadConfig } from "../config.js";
 import { createLlmProvider } from "../llm/create-provider.js";
-import { chatToolDefinitions } from "../llm/inari-tools.js";
+import { applySkillToolAllowlist, chatToolDefinitions, knownChatToolNames } from "../llm/inari-tools.js";
+import { resolveSkillsContext } from "../skills/resolve-context.js";
 import type { AgentHistoryItem } from "../llm/types.js";
 import { createChatSystemPrompt, runAgentTurn } from "../agent/loop.js";
 import type { ConfirmFn } from "../tools/engine-run.js";
@@ -22,6 +23,9 @@ import {
 } from "./chat-chrome.js";
 import { handleChatSlashInput } from "./chat-slash.js";
 import { getWorkspaceGitBranch } from "./git-branch.js";
+import { resolveWorkspaceRoot } from "../workspace-root.js";
+
+export { resolveWorkspaceRoot };
 
 function createConfirm(rl: readline.Interface, locale: Locale, plain: boolean): ConfirmFn {
   const ansi = useChatAnsi(plain);
@@ -56,15 +60,24 @@ export async function runChatRepl(options: {
     model: options.modelCli,
   });
   const provider = createLlmProvider(cfg);
-  const system = createChatSystemPrompt(options.workspaceRoot);
   const readOnly = cfg.readOnly || options.readOnlyCli;
   const useStream = cfg.streaming && !options.noStream;
   const sidecarArgv = cfg.sidecar.argv;
-  const tools = chatToolDefinitions(
+  const includeCodebaseSearch = sidecarArgv !== null;
+  const includeSemanticSearch = cfg.embeddings.client !== null;
+  const known = knownChatToolNames({
     readOnly,
-    sidecarArgv !== null,
-    cfg.embeddings.client !== null,
-  );
+    includeCodebaseSearch,
+    includeSemanticSearch,
+  });
+  const skillsCtx = await resolveSkillsContext(options.cwd, cfg.skillPackPaths, known);
+  let tools = chatToolDefinitions(readOnly, includeCodebaseSearch, includeSemanticSearch);
+  tools = applySkillToolAllowlist(tools, skillsCtx.toolAllowlist);
+  const system = createChatSystemPrompt(options.workspaceRoot, skillsCtx.systemPromptAppendix);
+  const slashHelpExtra =
+    skillsCtx.slashHints.length > 0
+      ? `\nSkill hints:\n${skillsCtx.slashHints.map((l) => `  · ${l}`).join("\n")}\n`
+      : undefined;
 
   let history: AgentHistoryItem[] = options.sessionFile
     ? await loadSessionFile(resolve(options.cwd, options.sessionFile))
@@ -89,6 +102,7 @@ export async function runChatRepl(options: {
       streaming: useStream,
       plain,
       gitBranch,
+      chatTheme: cfg.chatTheme,
     }),
   );
 
@@ -102,29 +116,38 @@ export async function runChatRepl(options: {
 
   try {
     while (true) {
-      const line = await rl.question(replPrompt(plain));
+      const line = await rl.question(replPrompt(plain, cfg.chatTheme));
       const trimmed = line.trim();
       if (isExitCommand(trimmed, loc)) break;
       if (!trimmed) continue;
 
       const slash = await handleChatSlashInput({
         locale: loc,
+        cwd: options.cwd,
+        workspaceRoot: options.workspaceRoot,
         trimmed,
+        getHistory: () => history,
         setHistory: (h) => {
           history = h;
+        },
+        persistHistory: async (h) => {
+          if (sessionPath) await saveSessionFile(sessionPath, h);
         },
         write: (s) => {
           output.write(s);
         },
         persistEmpty,
+        slashHelpExtra,
       });
-      if (slash === "exit") break;
-      if (slash === "again") continue;
+      if (slash.kind === "exit") break;
+      if (slash.kind === "again") continue;
 
-      output.write(replUserBlock(loc, trimmed, plain));
+      const userText = slash.kind === "send" ? slash.text : trimmed;
+
+      output.write(replUserBlock(loc, userText, plain, cfg.chatTheme));
 
       if (useStream) {
-        output.write(replAssistantLead(plain));
+        output.write(replAssistantLead(plain, cfg.chatTheme));
       }
 
       const { assistantText, history: next } = await runAgentTurn({
@@ -132,7 +155,7 @@ export async function runChatRepl(options: {
         provider,
         tools,
         systemPrompt: system,
-        userText: trimmed,
+        userText,
         history,
         maxSteps: cfg.maxAgentSteps,
         maxHistoryItems: cfg.maxHistoryItems,
@@ -154,17 +177,13 @@ export async function runChatRepl(options: {
       if (useStream) {
         output.write("\n");
       } else {
-        output.write(`${replAssistantLead(plain)}${assistantText}\n`);
+        output.write(`${replAssistantLead(plain, cfg.chatTheme)}${assistantText}\n`);
       }
-      output.write(replTurnSeparator(plain));
+      output.write(replTurnSeparator(plain, cfg.chatTheme));
       await persist();
     }
   } finally {
     await persist();
     rl.close();
   }
-}
-
-export function resolveWorkspaceRoot(flag: string | undefined, cwd: string): string {
-  return resolve(cwd, flag ?? ".");
 }

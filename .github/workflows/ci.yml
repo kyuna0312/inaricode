@@ -32,17 +32,48 @@ jobs:
       - name: Install JS dependencies
         run: yarn install --frozen-lockfile
 
-      - name: ESLint (CLI + tests)
-        run: yarn lint
-
       - name: Build inaricode-engine (debug)
         run: cargo build --manifest-path packages/engine/Cargo.toml
 
-      - name: CLI — Turborepo build + Vitest
+      - name: CLI — lint, build, test (Turborepo)
         env:
           # Skip napi-rs native build in CI; exercise JSON-line subprocess IPC.
           INARI_ENGINE_IPC: subprocess
-        run: yarn turbo run build test --filter=@inaricode/cli
+        run: yarn turbo run lint build test --filter=@inaricode/cli
 
       - name: Cargo test (engine)
         run: cargo test --manifest-path packages/engine/Cargo.toml
+
+      - name: Clippy (engine + engine-native)
+        run: |
+          cargo clippy --manifest-path packages/engine/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --manifest-path packages/engine-native/Cargo.toml --all-targets -- -D warnings
+
+      - name: npm pack dry-run (@inaricode/cli)
+        run: yarn pack:check
+
+  engine-native-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: yarn
+          cache-dependency-path: yarn.lock
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            packages/engine -> target
+            packages/engine-native -> target
+
+      - name: Install JS dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build @inaricode/engine-native (napi release)
+        run: yarn workspace @inaricode/engine-native build

@@ -1,0 +1,11 @@
+# Example contributor task — copy and adapt (not executed by the CLI yet).
+id: pre-release-check
+title: Pre-release sanity check
+description: Run before tagging a semver release.
+steps:
+  - command: yarn verify:all
+    note: Lint, CLI build/test, and Rust engine tests.
+  - command: cargo build --release --manifest-path packages/engine/Cargo.toml
+    note: Confirm release engine binary builds.
+  - note: Update README / CHANGELOG if user-facing behavior changed.
+  - note: Tag only after merge to main; use semver on packages/cli.

@@ -62,6 +62,26 @@ export function chatToolDefinitions(
   return selectToolsForMode(defs, readOnly);
 }
 
+/** Tool names the driver may expose after read-only / sidecar / embeddings toggles. */
+export function knownChatToolNames(opts: {
+  readOnly: boolean;
+  includeCodebaseSearch: boolean;
+  includeSemanticSearch: boolean;
+}): Set<string> {
+  return new Set(
+    chatToolDefinitions(opts.readOnly, opts.includeCodebaseSearch, opts.includeSemanticSearch).map((d) => d.name),
+  );
+}
+
+/** When skill packs are active, keep only tools listed in the merged allowlist. */
+export function applySkillToolAllowlist(
+  defs: InariToolDefinition[],
+  allow: Set<string> | null,
+): InariToolDefinition[] {
+  if (!allow || allow.size === 0) return defs;
+  return defs.filter((d) => allow.has(d.name));
+}
+
 /** Engine-backed tools (same JSON schema for Anthropic and OpenAI-compatible APIs). */
 export const INARI_TOOL_DEFINITIONS: InariToolDefinition[] = [
   {
@@ -118,7 +138,7 @@ export const INARI_TOOL_DEFINITIONS: InariToolDefinition[] = [
   {
     name: "symbol_outline",
     description:
-      "List top-level symbols in a source file (heuristic regex: TS/JS, Python, Rust, Go). Not a full tree-sitter parse.",
+      "List symbols in a source file. TypeScript/JavaScript/TSX/JSX use tree-sitter when available (classes, functions, interfaces, methods, consts); Python, Rust, Go use line regex heuristics; TS/JS falls back to regex if parsing fails.",
     input_schema: {
       type: "object",
       properties: {

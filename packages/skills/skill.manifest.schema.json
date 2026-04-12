@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://inaricode.dev/schemas/skill.manifest.json",
+  "title": "InariCode skill manifest (v0)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "version", "name", "description", "system_prompt_file", "tools_allow"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Stable kebab-case identifier"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semver or simple version string"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "system_prompt_file": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Path relative to this manifest (e.g. ./prompt.md)"
+    },
+    "tools_allow": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Inari tool names allowed when this skill is active"
+    },
+    "slash_hints": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Optional extra lines appended to /help in chat when this pack is loaded"
+    }
+  }
+}

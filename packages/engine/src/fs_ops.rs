@@ -42,7 +42,7 @@ pub fn read_file(workspace: &Path, payload: &Value) -> Result<Value> {
     let (body, range_label) = match (start_line, end_line) {
         (Some(s), Some(e)) if s >= 1 && e >= s => {
             let s0 = s - 1;
-            let e0 = (e as usize).min(lines.len());
+            let e0 = e.min(lines.len());
             let slice = lines[s0..e0].join("\n");
             (slice, format!("lines {}-{} of {}", s, e0, total))
         }
@@ -52,7 +52,7 @@ pub fn read_file(workspace: &Path, payload: &Value) -> Result<Value> {
             (slice, format!("lines {}-end of {}", s, total))
         }
         (None, Some(e)) if e >= 1 => {
-            let e0 = (e as usize).min(lines.len());
+            let e0 = e.min(lines.len());
             let slice = lines[..e0].join("\n");
             (slice, format!("lines 1-{} of {}", e0, total))
         }

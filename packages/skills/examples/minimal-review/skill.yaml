@@ -1,0 +1,14 @@
+# Example skill pack — load with inaricode.yaml → skills.packs (see packages/skills/README.md).
+# JSON Schema: ../../../skill.manifest.schema.json
+id: minimal-review
+version: "0.1.0"
+name: Minimal code review (example)
+description: >
+  Stub pack demonstrating declarative layout. Replace prompt.md with your instructions.
+system_prompt_file: ./prompt.md
+tools_allow:
+  - read_file
+  - list_dir
+  - grep
+slash_hints:
+  - "Skill focus: read-only review — use grep then read_file."

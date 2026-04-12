@@ -2,10 +2,10 @@ import type { Command } from "commander";
 import { getProviderCatalog, getProviderCatalogEntry } from "./catalog.js";
 import type { MessageKey } from "../i18n/strings.js";
 
-type L = (key: MessageKey, vars?: Record<string, string>) => string;
+type TranslateFn = (key: MessageKey, vars?: Record<string, string>) => string;
 
-export function registerProvidersCommand(program: Command, L: L): void {
-  const prov = program.command("providers").description(L("cmdProviders"));
+export function registerProvidersCommand(program: Command, tr: TranslateFn): void {
+  const prov = program.command("providers").description(tr("cmdProviders"));
 
   prov
     .command("list")
@@ -32,7 +32,7 @@ export function registerProvidersCommand(program: Command, L: L): void {
     .action((id: string) => {
       const e = getProviderCatalogEntry(id.trim().toLowerCase());
       if (!e) {
-        process.stderr.write(`${L("providersUnknown", { id })}\n`);
+        process.stderr.write(`${tr("providersUnknown", { id })}\n`);
         process.exitCode = 1;
         return;
       }

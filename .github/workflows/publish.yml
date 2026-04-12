@@ -1,0 +1,66 @@
+# Publish @inaricode/cli to npm when a version tag is pushed, or manually.
+# Repository secret: NPM_TOKEN (automation access token with publish scope).
+
+name: Publish npm
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify git tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          PKG_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          TAG="${GITHUB_REF_NAME}"
+          EXPECTED="v${PKG_VERSION}"
+          if [ "$TAG" != "$EXPECTED" ]; then
+            echo "::error::Git tag '$TAG' must match packages/cli package.json version (expected $EXPECTED)."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: yarn
+          cache-dependency-path: yarn.lock
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/engine -> target
+
+      - name: Install JS dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build inaricode-engine (debug)
+        run: cargo build --manifest-path packages/engine/Cargo.toml
+
+      - name: Full verify (lint, test, Rust tests, pack dry-run)
+        env:
+          INARI_ENGINE_IPC: subprocess
+        run: yarn verify:all
+
+      - name: Publish @inaricode/cli
+        working-directory: packages/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance

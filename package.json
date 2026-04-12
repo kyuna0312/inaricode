@@ -15,13 +15,16 @@
     "build:cli": "turbo run build --filter=@inaricode/cli",
     "build": "yarn build:engine:dev && turbo run build --filter=@inaricode/cli",
     "test": "turbo run test --filter=@inaricode/cli && cargo test --manifest-path packages/engine/Cargo.toml",
-    "lint": "eslint \"packages/cli/src/**/*.{ts,tsx}\" \"packages/cli/test/**/*.ts\" --max-warnings 0",
-    "verify": "yarn lint && turbo run build test --filter=@inaricode/cli",
+    "lint": "turbo run lint --filter=@inaricode/cli",
+    "verify": "turbo run lint build test --filter=@inaricode/cli",
+    "verify:all": "turbo run lint build test --filter=@inaricode/cli && cargo test --manifest-path packages/engine/Cargo.toml && yarn pack:check",
+    "pack:check": "cd packages/cli && npm pack --dry-run",
     "cli": "node ./packages/cli/dist/cli.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.2.0",
+    "eslint-plugin-unicorn": "^61.0.2",
     "turbo": "^2.5.4",
     "typescript": "5.7.2",
     "typescript-eslint": "^8.58.1"

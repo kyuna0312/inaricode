@@ -5,7 +5,8 @@ import { resolve } from "node:path";
 import type { InariConfig } from "../config.js";
 import { loadConfig } from "../config.js";
 import { createLlmProvider } from "../llm/create-provider.js";
-import { chatToolDefinitions } from "../llm/inari-tools.js";
+import { applySkillToolAllowlist, chatToolDefinitions, knownChatToolNames } from "../llm/inari-tools.js";
+import { resolveSkillsContext } from "../skills/resolve-context.js";
 import type { AgentHistoryItem, InariToolDefinition, LLMProvider } from "../llm/types.js";
 import { createChatSystemPrompt, runAgentTurn } from "../agent/loop.js";
 import type { ConfirmFn } from "../tools/engine-run.js";
@@ -14,7 +15,7 @@ import { loadSessionFile, saveSessionFile } from "../session/file-session.js";
 import { cliVersionLine } from "../pkg-meta.js";
 import { tr } from "../i18n/strings.js";
 import { isExitCommand, isAffirmativeKey, isNegativeKey } from "../i18n/prompts.js";
-import { buildTuiChromeLines } from "./chat-chrome.js";
+import { buildTuiChromeLines, tuiAccentColor } from "./chat-chrome.js";
 import { handleChatSlashInput } from "./chat-slash.js";
 import { getWorkspaceGitBranch } from "./git-branch.js";
 
@@ -49,6 +50,7 @@ type Bootstrapped = {
   sessionPath: string | null;
   gitBranch: string | null;
   plain: boolean;
+  slashHelpExtra: string | undefined;
 };
 
 function ChatTuiInner(
@@ -57,6 +59,7 @@ function ChatTuiInner(
   const { exit } = useApp();
   const loc = props.cfg.locale;
   const plain = props.plain;
+  const accent = tuiAccentColor(props.cfg.chatTheme, plain);
 
   const chrome = useMemo(
     () =>
@@ -71,6 +74,7 @@ function ChatTuiInner(
         streaming: props.useStream,
         plain,
         gitBranch: props.gitBranch,
+        chatTheme: props.cfg.chatTheme,
       }),
     [
       loc,
@@ -82,6 +86,7 @@ function ChatTuiInner(
       props.useStream,
       plain,
       props.gitBranch,
+      props.cfg.chatTheme,
     ],
   );
 
@@ -137,25 +142,32 @@ function ChatTuiInner(
 
       const slash = await handleChatSlashInput({
         locale: loc,
+        cwd: props.cwd,
+        workspaceRoot: props.workspaceRoot,
         trimmed,
+        getHistory: () => history,
         setHistory,
+        persistHistory: persist,
         write: (s) => setTranscript((t) => t + s),
         persistEmpty,
+        slashHelpExtra: props.slashHelpExtra,
       });
-      if (slash === "exit") {
+      if (slash.kind === "exit") {
         await persist(history);
         exit();
         return;
       }
-      if (slash === "again") {
+      if (slash.kind === "again") {
         return;
       }
+
+      const userText = slash.kind === "send" ? slash.text : trimmed;
 
       setInput("");
       setBusy(true);
       setStreaming("");
       const you = tr(loc, "chatReplYou");
-      setTranscript((t) => `${t}\n${you} › ${trimmed}\n`);
+      setTranscript((t) => `${t}\n${you} › ${userText}\n`);
 
       const confirmFn = props.skipConfirm ? async () => true : makeConfirm();
 
@@ -165,7 +177,7 @@ function ChatTuiInner(
           provider: props.provider,
           tools: props.tools,
           systemPrompt: props.system,
-          userText: trimmed,
+          userText,
           history,
           maxSteps: props.cfg.maxAgentSteps,
           maxHistoryItems: props.cfg.maxHistoryItems,
@@ -212,6 +224,8 @@ function ChatTuiInner(
       props.tools,
       props.useStream,
       props.workspaceRoot,
+      props.cwd,
+      props.slashHelpExtra,
     ],
   );
 
@@ -242,7 +256,7 @@ function ChatTuiInner(
       <Text dimColor>{chrome.workspaceLine}</Text>
       {chrome.branchLine ? <Text dimColor>{chrome.branchLine}</Text> : null}
       {chrome.sessionLine ? <Text dimColor>{chrome.sessionLine}</Text> : null}
-      <Text color="cyan">{chrome.badges}</Text>
+      <Text color={accent}>{chrome.badges}</Text>
       <Text dimColor>{chrome.hint}</Text>
     </Box>
   );
@@ -295,7 +309,7 @@ function ChatTuiInner(
         plain ? (
           <Text dimColor>{tr(loc, "tuiBusy")}</Text>
         ) : (
-          <Text color="cyan">{tr(loc, "tuiBusy")}</Text>
+          <Text color={accent}>{tr(loc, "tuiBusy")}</Text>
         )
       ) : (
         <Box>
@@ -320,15 +334,24 @@ export async function runChatTui(options: RunChatTuiOptions): Promise<void> {
     model: options.modelCli,
   });
   const provider = createLlmProvider(cfg);
-  const system = createChatSystemPrompt(options.workspaceRoot);
   const readOnly = cfg.readOnly || options.readOnlyCli;
   const useStream = cfg.streaming && !options.noStream;
   const sidecarArgv = cfg.sidecar.argv;
-  const tools = chatToolDefinitions(
+  const includeCodebaseSearch = sidecarArgv !== null;
+  const includeSemanticSearch = cfg.embeddings.client !== null;
+  const known = knownChatToolNames({
     readOnly,
-    sidecarArgv !== null,
-    cfg.embeddings.client !== null,
-  );
+    includeCodebaseSearch,
+    includeSemanticSearch,
+  });
+  const skillsCtx = await resolveSkillsContext(options.cwd, cfg.skillPackPaths, known);
+  let tools = chatToolDefinitions(readOnly, includeCodebaseSearch, includeSemanticSearch);
+  tools = applySkillToolAllowlist(tools, skillsCtx.toolAllowlist);
+  const system = createChatSystemPrompt(options.workspaceRoot, skillsCtx.systemPromptAppendix);
+  const slashHelpExtra =
+    skillsCtx.slashHints.length > 0
+      ? `\nSkill hints:\n${skillsCtx.slashHints.map((l) => `  · ${l}`).join("\n")}\n`
+      : undefined;
   const sessionPath = options.sessionFile ? resolve(options.cwd, options.sessionFile) : null;
   const initialHistory: AgentHistoryItem[] = sessionPath
     ? await loadSessionFile(sessionPath)
@@ -351,6 +374,7 @@ export async function runChatTui(options: RunChatTuiOptions): Promise<void> {
       initialHistory={initialHistory}
       gitBranch={gitBranch}
       plain={plain}
+      slashHelpExtra={slashHelpExtra}
     />,
   );
   await waitUntilExit();

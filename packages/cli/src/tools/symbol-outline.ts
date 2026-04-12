@@ -1,3 +1,5 @@
+import { extractSymbolOutlineAst } from "./symbol-outline-ast.js";
+
 export type OutlineSymbol = {
   line: number;
   kind: string;
@@ -5,9 +7,19 @@ export type OutlineSymbol = {
 };
 
 /**
- * Lightweight outline (Phase 3+): regex/heuristic, not full tree-sitter.
+ * File outline for `symbol_outline`: **tree-sitter** for TypeScript / JavaScript (classes,
+ * functions, interfaces, methods, …) when native grammars load; **regex** fallback for the
+ * same extensions on failure and for **Python / Rust / Go** (and heuristic TS/JS lines).
  */
 export function extractSymbolOutline(filePath: string, content: string): { symbols: OutlineSymbol[] } {
+  const ast = extractSymbolOutlineAst(filePath, content);
+  if (ast !== null && ast.length > 0) {
+    return { symbols: ast };
+  }
+  return extractSymbolOutlineRegex(filePath, content);
+}
+
+function extractSymbolOutlineRegex(filePath: string, content: string): { symbols: OutlineSymbol[] } {
   const lines = content.split("\n");
   const ext = filePath.includes(".") ? (filePath.split(".").pop() ?? "").toLowerCase() : "";
   const symbols: OutlineSymbol[] = [];
