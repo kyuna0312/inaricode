@@ -66,7 +66,7 @@ export function extractSymbolOutline(filePath: string, content: string): { symbo
         push(n, "function", m[1]);
         continue;
       }
-      m = line.match(/^\s*class\s+([A-Za-z0-9_]+)\s*(?:\(|\:)/);
+      m = line.match(/^\s*class\s+([A-Za-z0-9_]+)\s*(?:\(|:)/);
       if (m) {
         push(n, "class", m[1]);
         continue;

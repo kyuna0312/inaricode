@@ -27,6 +27,10 @@ export const ProviderIdSchema = z.enum([
   "eguna",
   /** Mongol AI — OpenAI-compatible; verify baseURL in vendor docs, override if needed */
   "mongol_ai",
+  /** Hugging Face Inference Providers — OpenAI-compatible chat (router) */
+  "huggingface",
+  /** Google Gemini — OpenAI-compatible endpoint (Generative Language API) */
+  "google",
   /** Any OpenAI-compatible HTTPS API — set baseURL */
   "custom",
 ]);
@@ -88,6 +92,16 @@ const OPENAI_PRESETS: Record<Exclude<ProviderId, "anthropic">, OpenAiPreset> = {
     defaultModel: "mongol-ai",
     envKeys: ["MONGOL_AI_API_KEY", "MONGOL_API_KEY"],
   },
+  huggingface: {
+    baseURL: "https://router.huggingface.co/v1",
+    defaultModel: "meta-llama/Llama-3.2-3B-Instruct",
+    envKeys: ["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"],
+  },
+  google: {
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+    defaultModel: "gemini-2.0-flash",
+    envKeys: ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+  },
   custom: {
     baseURL: "",
     defaultModel: "gpt-4o-mini",
@@ -134,6 +148,14 @@ const RawConfigSchema = z
       .optional(),
     /** UI language: English or Mongolian (Cyrillic). Override with INARI_LANG. */
     locale: z.enum(["en", "mn"]).optional().default("en"),
+    /** Fuzzy picker: built-in Ink UI or external fzf (fish/zsh-style). */
+    picker: z
+      .object({
+        mode: z.enum(["builtin", "fzf"]).optional().default("builtin"),
+        fzfPath: z.string().min(1).optional().default("fzf"),
+        defaultFileGlob: z.string().min(1).optional().default("**/*"),
+      })
+      .optional(),
   })
   .superRefine((val, ctx) => {
     if (val.provider === "custom" && !val.baseURL) {
@@ -162,37 +184,47 @@ export type InariConfig = {
   embeddings: { client: EmbeddingClient | null };
   /** Effective UI locale (INARI_LANG overrides config file). */
   locale: Locale;
+  /** Fuzzy file picker (`inari pick`). */
+  picker: {
+    mode: "builtin" | "fzf";
+    fzfPath: string;
+    defaultFileGlob: string;
+  };
 };
 
 export async function writeExampleConfig(cwd: string, locale: Locale = "en"): Promise<string> {
   const path = join(cwd, "inaricode.config.cjs");
-  const langNote =
+  const langLine =
     locale === "mn"
-      ? ` * Хэл: locale: 'mn' (Монгол) эсвэл INARI_LANG=mn — CLI, doctor, chat интерфэйс.
-`
-      : ` * Language: locale: 'mn' or INARI_LANG=mn for Mongolian UI (CLI, doctor, chat).
-`;
-  const body = `/** InariCode — API keys via env or apiKey below
-${langNote} * Providers:
- *  - anthropic     → ANTHROPIC_API_KEY
- *  - openai        → OPENAI_API_KEY (ChatGPT)
- *  - kimi          → MOONSHOT_API_KEY or KIMI_API_KEY
- *  - qwen          → DASHSCOPE_API_KEY or QWEN_API_KEY (compatible mode)
- *  - ollama        → local Llama etc. (optional OLLAMA_API_KEY)
- *  - groq          → GROQ_API_KEY
- *  - together      → TOGETHER_API_KEY
- *  - egune / eguna → EGUNE_API_KEY or EGUNA_API_KEY (Egune platform, OpenAI-compatible)
- *  - mongol_ai     → MONGOL_AI_API_KEY (override baseURL if your dashboard shows a different URL)
- *  - custom        → baseURL + OPENAI_API_KEY / INARI_API_KEY / AI_API_KEY
- *
- * Optional: streaming (default true), readOnly, maxHistoryItems,
- * shell: { denySubstrings: [], allowCommandPrefixes: ['git ','yarn '] }
- * Optional Phase 3 sidecar: pip install -r packages/sidecar/requirements.txt then
- *   sidecar: { enabled: true }  // or command: 'python3 /abs/path/inari_sidecar.py'
- * Optional Phase 3+ semantic search: OpenAI-compatible /embeddings (uses OPENAI_API_KEY for Anthropic users by default)
- *   embeddings: { enabled: true, model: 'text-embedding-3-small' }
- * UI: locale 'en' | 'mn' (overridden by INARI_LANG)
- */
+      ? `// Хэл: locale: 'mn' (Монгол) эсвэл INARI_LANG=mn — CLI, doctor, chat интерфэйс.\n`
+      : `// Language: locale: 'mn' or INARI_LANG=mn for Mongolian UI (CLI, doctor, chat).\n`;
+  const body = `// InariCode — API keys via env or apiKey below
+// Release tag: packages/cli/package.json → version (semver), patch is the third number,
+//   flower name: optional inaricode.codename, else derived from version (see src/release-flowers.ts).
+${langLine}// Providers:
+//   anthropic     → ANTHROPIC_API_KEY
+//   openai        → OPENAI_API_KEY (ChatGPT)
+//   kimi          → MOONSHOT_API_KEY or KIMI_API_KEY
+//   qwen          → DASHSCOPE_API_KEY or QWEN_API_KEY (compatible mode)
+//   ollama        → local Llama etc. (optional OLLAMA_API_KEY)
+//   groq          → GROQ_API_KEY
+//   together      → TOGETHER_API_KEY
+//   egune / eguna → EGUNE_API_KEY or EGUNA_API_KEY (Egune platform, OpenAI-compatible)
+//   mongol_ai     → MONGOL_AI_API_KEY (override baseURL if your dashboard shows a different URL)
+//   huggingface   → HF_TOKEN or HUGGING_FACE_HUB_TOKEN (router OpenAI-compatible chat)
+//   google        → GOOGLE_API_KEY or GEMINI_API_KEY (Gemini via OpenAI-compatible API)
+//   custom        → baseURL + OPENAI_API_KEY / INARI_API_KEY / AI_API_KEY
+//
+// Multimodal: inari media image (Hugging Face text-to-image; HF_TOKEN). Text-to-video is not bundled yet.
+//
+// Optional: streaming (default true), readOnly, maxHistoryItems,
+// shell: { denySubstrings: [], allowCommandPrefixes: ['git ','yarn '] }
+// Optional Phase 3 sidecar: pip install -r packages/sidecar/requirements.txt then
+//   sidecar: { enabled: true }  // or command: 'python3 /abs/path/inari_sidecar.py'
+// Optional Phase 3+ semantic search: OpenAI-compatible /embeddings (uses OPENAI_API_KEY for Anthropic users by default)
+//   embeddings: { enabled: true, model: 'text-embedding-3-small' }
+// UI: locale 'en' | 'mn' (overridden by INARI_LANG)
+// Picker (inari pick): picker: { mode: 'builtin' | 'fzf', fzfPath: 'fzf', defaultFileGlob: '**/*.{ts,tsx,js}' }
 module.exports = {
   provider: 'anthropic',
   model: 'claude-sonnet-4-20250514',
@@ -221,6 +253,29 @@ function firstEnv(keys: string[]): string | undefined {
     if (v && v.length > 0) return v;
   }
   return undefined;
+}
+
+function pickerFromParsed(c: z.infer<typeof RawConfigSchema>): InariConfig["picker"] {
+  const p = c.picker;
+  return {
+    mode: p?.mode === "fzf" ? "fzf" : "builtin",
+    fzfPath: p?.fzfPath ?? "fzf",
+    defaultFileGlob: p?.defaultFileGlob ?? "**/*",
+  };
+}
+
+/** Picker only — no API keys required (for `inari pick`). */
+export async function loadPickerSettings(searchFrom: string): Promise<InariConfig["picker"]> {
+  const explorer = cosmiconfig("inaricode", {
+    searchPlaces: [...INARICODE_CONFIG_SEARCH_PLACES],
+  });
+  const found = await explorer.search(searchFrom);
+  const raw = (found?.config ?? {}) as Record<string, unknown>;
+  const parsed = RawConfigSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { mode: "builtin", fzfPath: "fzf", defaultFileGlob: "**/*" };
+  }
+  return pickerFromParsed(parsed.data);
 }
 
 function sidecarFromParsed(c: z.infer<typeof RawConfigSchema>): InariConfig["sidecar"] {
@@ -285,6 +340,7 @@ export async function loadConfig(searchFrom: string): Promise<InariConfig> {
   const c = parsed.data;
   const shellPolicy = resolveShellPolicy(c.shell);
   const sidecar = sidecarFromParsed(c);
+  const picker = pickerFromParsed(c);
 
   if (c.provider === "anthropic") {
     const model = c.model ?? "claude-sonnet-4-20250514";
@@ -306,6 +362,7 @@ export async function loadConfig(searchFrom: string): Promise<InariConfig> {
       sidecar,
       embeddings,
       locale: resolvedLocale(c),
+      picker,
     };
   }
 
@@ -341,5 +398,6 @@ export async function loadConfig(searchFrom: string): Promise<InariConfig> {
     sidecar,
     embeddings,
     locale: resolvedLocale(c),
+    picker,
   };
 }

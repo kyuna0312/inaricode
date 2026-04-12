@@ -1,5 +1,6 @@
 .cursor/
 
+.turbo/
 node_modules/
 dist/
 *.log
@@ -12,3 +13,12 @@ packages/engine-native/*.node
 .yarn/cache
 .yarn/install-state.gz
 .inaricode/
+
+# Local config from `yarn cli init` while hacking on the repo itself
+/inaricode.config.cjs
+
+# Accidental tsc output next to Vitest tests (emit belongs in dist/)
+packages/cli/test/**/*.js
+packages/cli/test/**/*.js.map
+packages/cli/test/**/*.d.ts
+packages/cli/test/**/*.d.ts.map

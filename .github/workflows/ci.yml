@@ -32,14 +32,17 @@ jobs:
       - name: Install JS dependencies
         run: yarn install --frozen-lockfile
 
+      - name: ESLint (CLI + tests)
+        run: yarn lint
+
       - name: Build inaricode-engine (debug)
         run: cargo build --manifest-path packages/engine/Cargo.toml
 
-      - name: Vitest (CLI)
+      - name: CLI — Turborepo build + Vitest
         env:
           # Skip napi-rs native build in CI; exercise JSON-line subprocess IPC.
           INARI_ENGINE_IPC: subprocess
-        run: yarn workspace @inaricode/cli test
+        run: yarn turbo run build test --filter=@inaricode/cli
 
       - name: Cargo test (engine)
         run: cargo test --manifest-path packages/engine/Cargo.toml

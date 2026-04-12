@@ -4,7 +4,7 @@ import { loadConfig, loadSidecarDoctorInfo, writeExampleConfig } from "./config.
 import { engineRequest, resolveEngineBinary, resolveEngineTransport } from "./engine/client.js";
 import { sidecarRpc } from "./sidecar/client.js";
 import { pingEmbeddings } from "./tools/embeddings-api.js";
-import { cliPackageVersion } from "./pkg-meta.js";
+import { cliVersionLine } from "./pkg-meta.js";
 import {
   inariHelpPreamble,
   inariLogoBannerFull,
@@ -13,7 +13,7 @@ import {
 import { loadLocalePreference, type Locale } from "./i18n/locale.js";
 import { tr, type MessageKey } from "./i18n/strings.js";
 
-const pkgVersion = cliPackageVersion();
+const versionLine = cliVersionLine();
 
 async function engineVersionLine(locale: Locale): Promise<string> {
   try {
@@ -37,14 +37,14 @@ async function main(): Promise<void> {
   program
     .name("inari")
     .description(L("programDescription"))
-    .version(pkgVersion)
-    .addHelpText("before", inariHelpPreamble(pkgVersion, locale));
+    .version(versionLine)
+    .addHelpText("before", inariHelpPreamble(versionLine, locale));
 
   program
     .command("logo")
     .description(L("cmdLogo"))
     .action(() => {
-      process.stdout.write(inariLogoBannerFull(pkgVersion, locale));
+      process.stdout.write(inariLogoBannerFull(versionLine, locale));
       const png = resolveBundledLogoPath();
       if (png) {
         process.stdout.write(`${L("logoBundledPng")}\n  ${png}\n`);
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
     .command("doctor")
     .description(L("cmdDoctor"))
     .action(async () => {
-      process.stdout.write(inariLogoBannerFull(pkgVersion, locale));
+      process.stdout.write(inariLogoBannerFull(versionLine, locale));
       process.stdout.write(`${await engineVersionLine(locale)}\n`);
       let transport: string;
       try {
@@ -120,6 +120,67 @@ async function main(): Promise<void> {
       }
     });
 
+  const media = program.command("media").description(L("cmdMedia"));
+  media
+    .command("image")
+    .description(L("cmdMediaImage"))
+    .requiredOption("-p, --prompt <text>", "Image prompt")
+    .option("-o, --output <path>", "Output file", "inari-image.png")
+    .option(
+      "-m, --model <id>",
+      "Hugging Face model id (e.g. black-forest-labs/FLUX.1-schnell)",
+      "black-forest-labs/FLUX.1-schnell",
+    )
+    .option("--provider <name>", "huggingface (default) or google", "huggingface")
+    .option("--token <secret>", "Override HF_TOKEN for this run")
+    .action(
+      async (opts: { prompt: string; output: string; model: string; provider: string; token?: string }) => {
+        const { runMediaImage } = await import("./media/run-media.js");
+        await runMediaImage({ cwd, ...opts });
+      },
+    );
+  media
+    .command("video")
+    .description(L("cmdMediaVideo"))
+    .action(async () => {
+      const { runMediaVideo } = await import("./media/run-media.js");
+      await runMediaVideo({ cwd });
+    });
+
+  program
+    .command("pick")
+    .description(L("cmdPick"))
+    .option("--root <path>", L("optRoot"), "")
+    .option("--glob <pattern>", L("optPickGlob"))
+    .option("--picker <mode>", L("optPicker"))
+    .action(
+      async (opts: { root: string; glob?: string; picker?: string }) => {
+        const { resolveWorkspaceRoot } = await import("./ui/chat-repl.js");
+        const { runPick } = await import("./pick/run-pick.js");
+        const workspaceRoot = resolveWorkspaceRoot(opts.root || undefined, cwd);
+        let picker: "builtin" | "fzf" | undefined;
+        if (opts.picker === "fzf") picker = "fzf";
+        else if (opts.picker === "builtin") picker = "builtin";
+        await runPick({ cwd, workspaceRoot, glob: opts.glob, picker });
+      },
+    );
+
+  program
+    .command("completion")
+    .description(L("cmdCompletion"))
+    .argument("<shell>", "zsh | fish | bash")
+    .action(async (shell: string) => {
+      const { renderCompletion } = await import("./completion/render.js");
+      const body = renderCompletion(shell.trim());
+      if (!body) {
+        process.stderr.write(`${L("completionInvalidShell", { shell })}\n`);
+        process.exitCode = 1;
+        return;
+      }
+      process.stdout.write(body);
+      if (!body.endsWith("\n")) process.stdout.write("\n");
+    });
+
   program
     .command("chat")
     .description(L("cmdChat"))
@@ -129,6 +190,7 @@ async function main(): Promise<void> {
     .option("--no-stream", L("optNoStream"), false)
     .option("--read-only", L("optReadOnly"), false)
     .option("--tui", L("optTui"), false)
+    .option("--plain", L("optPlain"), false)
     .action(
       async (opts: {
         root: string;
@@ -137,6 +199,7 @@ async function main(): Promise<void> {
         noStream: boolean;
         readOnly: boolean;
         tui: boolean;
+        plain: boolean;
       }) => {
         const { resolveWorkspaceRoot } = await import("./ui/chat-repl.js");
         const workspaceRoot = resolveWorkspaceRoot(opts.root || undefined, cwd);
@@ -147,6 +210,7 @@ async function main(): Promise<void> {
           sessionFile: opts.session,
           noStream: Boolean(opts.noStream),
           readOnlyCli: Boolean(opts.readOnly),
+          plainCli: Boolean(opts.plain),
         };
         if (opts.tui) {
           const { runChatTui } = await import("./ui/chat-tui.js");

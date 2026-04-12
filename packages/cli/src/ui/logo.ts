@@ -39,10 +39,10 @@ export function resolveBundledLogoPath(): string | null {
   return existsSync(p) ? p : null;
 }
 
-/** Full banner: `inari doctor`, `inari logo`. */
-export function inariLogoBannerFull(version: string, locale: Locale): string {
+/** Full banner: `inari doctor`, `inari logo`. Pass `cliVersionLine()` from `pkg-meta`. */
+export function inariLogoBannerFull(versionLine: string, locale: Locale): string {
   const c = z(ansiLogoEnabled());
-  const title = `${c.bold}${c.w}InariCode${c.x} ${c.dim}v${version}${c.x}`;
+  const title = `${c.bold}${c.w}InariCode${c.x} ${c.dim}${versionLine}${c.x}`;
   const sub = `${c.dim}${tr(locale, "logoSub")}${c.x}`;
   const kitsune = `${c.b}${tr(locale, "logoKitsune")}${c.x}`;
   const usb = `${c.d}[⌂]${c.x} ${tr(locale, "logoUsb")}`;
@@ -64,15 +64,15 @@ export function inariLogoBannerFull(version: string, locale: Locale): string {
 }
 
 /** One-line header for `inari chat` / TUI. */
-export function inariLogoBannerCompact(version: string, locale: Locale): string {
+export function inariLogoBannerCompact(versionLine: string, locale: Locale): string {
   const c = z(ansiLogoEnabled());
   return (
-    `${c.o}▄▄▄${c.x} ${c.bold}${c.w}InariCode${c.x} ${c.dim}v${version}${c.x}  ` +
+    `${c.o}▄▄▄${c.x} ${c.bold}${c.w}InariCode${c.x} ${c.dim}${versionLine}${c.x}  ` +
     `${c.O}__/\\__${c.x} ${c.b}·${c.x} ${c.dim}${tr(locale, "logoCompactHints")}${c.x}\n`
   );
 }
 
 /** Prepended to `inari --help`. */
-export function inariHelpPreamble(version: string, locale: Locale): string {
-  return `${inariLogoBannerCompact(version, locale)}\n`;
+export function inariHelpPreamble(versionLine: string, locale: Locale): string {
+  return `${inariLogoBannerCompact(versionLine, locale)}\n`;
 }

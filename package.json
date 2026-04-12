@@ -9,9 +9,19 @@
     "build:engine": "cargo build --manifest-path packages/engine/Cargo.toml --release",
     "build:engine:dev": "cargo build --manifest-path packages/engine/Cargo.toml",
     "build:native": "yarn workspace @inaricode/engine-native build",
-    "build:cli": "yarn workspace @inaricode/cli build",
-    "build": "yarn build:engine:dev && yarn build:cli",
-    "test": "yarn workspace @inaricode/cli test && cargo test --manifest-path packages/engine/Cargo.toml"
+    "build:cli": "turbo run build --filter=@inaricode/cli",
+    "build": "yarn build:engine:dev && turbo run build --filter=@inaricode/cli",
+    "test": "turbo run test --filter=@inaricode/cli && cargo test --manifest-path packages/engine/Cargo.toml",
+    "lint": "eslint \"packages/cli/src/**/*.{ts,tsx}\" \"packages/cli/test/**/*.ts\" --max-warnings 0",
+    "verify": "yarn lint && turbo run build test --filter=@inaricode/cli",
+    "cli": "node ./packages/cli/dist/cli.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.2.0",
+    "turbo": "^2.5.4",
+    "typescript": "5.7.2",
+    "typescript-eslint": "^8.58.1"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

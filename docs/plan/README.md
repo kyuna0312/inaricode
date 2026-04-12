@@ -2,6 +2,7 @@
 
 Canonical roadmap and architecture:
 
-- **[`inari-code-plan.md`](./inari-code-plan.md)** — current capabilities, **prioritized backlog (P0–P3)**, non-goals, risks, and phased history.
+- **[`inari-code-plan.md`](./inari-code-plan.md)** — capabilities; **phases 4–8** (distribution → accuracy → ecosystem → integrations → research); **P0–P3 backlog**; extensibility; ideas index; non-goals; P3 mmap gate.
+- **[`../v1-launch-and-social.md`](../v1-launch-and-social.md)** — v1 **release** and **social / community** notes (when you open-source).
 
-The plan is optimized for **decisions**: outcomes first, dependency order, time horizons, and measurable “done” criteria. Update the **At a glance** table and **Prioritized backlog** when milestones shift so contributors and tooling stay aligned.
+The plan is a **decision log**: measurable “done” criteria, dependency order, and explicit non-goals. When you ship a feature, update the **At a glance** table, **Prioritized backlog**, and root **README** in one pass.

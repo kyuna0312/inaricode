@@ -32,7 +32,9 @@ export async function fetchEmbeddings(
   try {
     j = JSON.parse(text) as EmbeddingsResponse;
   } catch (e) {
-    throw new Error(`embeddings: invalid JSON: ${String(e)}`);
+    const err = new Error(`embeddings: invalid JSON: ${String(e)}`);
+    if (e instanceof Error) err.cause = e;
+    throw err;
   }
   const rows = j.data ?? [];
   const out: number[][] = Array.from({ length: inputs.length }, () => []);

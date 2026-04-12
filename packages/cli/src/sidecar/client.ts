@@ -67,7 +67,9 @@ export async function sidecarRpc(argv: string[], req: SidecarRequest, timeoutMs 
   try {
     parsed = JSON.parse(raw) as { ok?: boolean; result?: unknown; error?: string };
   } catch (e) {
-    throw new Error(`invalid sidecar JSON: ${String(e)}: ${raw.slice(0, 500)}`);
+    const err = new Error(`invalid sidecar JSON: ${String(e)}: ${raw.slice(0, 500)}`);
+    if (e instanceof Error) err.cause = e;
+    throw err;
   }
   if (!parsed.ok) {
     throw new Error(parsed.error || "sidecar error");

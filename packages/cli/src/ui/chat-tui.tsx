@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 import { resolve } from "node:path";
@@ -11,10 +11,12 @@ import { createChatSystemPrompt, runAgentTurn } from "../agent/loop.js";
 import type { ConfirmFn } from "../tools/engine-run.js";
 import type { EmbeddingClient } from "../tools/embeddings-api.js";
 import { loadSessionFile, saveSessionFile } from "../session/file-session.js";
-import { cliPackageVersion } from "../pkg-meta.js";
-import { inariLogoBannerCompact } from "./logo.js";
+import { cliVersionLine } from "../pkg-meta.js";
 import { tr } from "../i18n/strings.js";
 import { isExitCommand, isAffirmativeKey, isNegativeKey } from "../i18n/prompts.js";
+import { buildTuiChromeLines } from "./chat-chrome.js";
+import { handleChatSlashInput } from "./chat-slash.js";
+import { getWorkspaceGitBranch } from "./git-branch.js";
 
 type ConfirmState = {
   title: string;
@@ -29,6 +31,7 @@ export type RunChatTuiOptions = {
   sessionFile?: string;
   noStream: boolean;
   readOnlyCli: boolean;
+  plainCli: boolean;
   signal?: AbortSignal;
 };
 
@@ -42,6 +45,8 @@ type Bootstrapped = {
   sidecarArgv: string[] | null;
   embeddingClient: EmbeddingClient | null;
   sessionPath: string | null;
+  gitBranch: string | null;
+  plain: boolean;
 };
 
 function ChatTuiInner(
@@ -49,15 +54,36 @@ function ChatTuiInner(
 ) {
   const { exit } = useApp();
   const loc = props.cfg.locale;
-  let header =
-    inariLogoBannerCompact(cliPackageVersion(), loc) +
-    tr(loc, "chatTuiTitle", { provider: props.cfg.provider, model: props.cfg.model }) +
-    (props.readOnly ? tr(loc, "chatReadOnly") : "") +
-    (props.useStream ? tr(loc, "chatStreaming") : tr(loc, "chatNoStream"));
-  if (props.sessionPath) header += `\n${tr(loc, "chatSession", { path: props.sessionPath })}`;
-  header += `\n${tr(loc, "chatRoot", { path: props.workspaceRoot })}\n${tr(loc, "chatHint")}\n`;
+  const plain = props.plain;
 
-  const [transcript, setTranscript] = useState(header);
+  const chrome = useMemo(
+    () =>
+      buildTuiChromeLines({
+        locale: loc,
+        version: cliVersionLine(),
+        provider: props.cfg.provider,
+        model: props.cfg.model,
+        workspaceRoot: props.workspaceRoot,
+        sessionPath: props.sessionPath,
+        readOnly: props.readOnly,
+        streaming: props.useStream,
+        plain,
+        gitBranch: props.gitBranch,
+      }),
+    [
+      loc,
+      props.cfg.provider,
+      props.cfg.model,
+      props.workspaceRoot,
+      props.sessionPath,
+      props.readOnly,
+      props.useStream,
+      plain,
+      props.gitBranch,
+    ],
+  );
+
+  const [transcript, setTranscript] = useState("");
   const [streaming, setStreaming] = useState("");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -70,6 +96,10 @@ function ChatTuiInner(
     },
     [props.sessionPath],
   );
+
+  const persistEmpty = useCallback(async () => {
+    if (props.sessionPath) await saveSessionFile(props.sessionPath, []);
+  }, [props.sessionPath]);
 
   const makeConfirm = useCallback((): ConfirmFn => {
     return ({ title, body }) =>
@@ -103,10 +133,27 @@ function ChatTuiInner(
         return;
       }
 
+      const slash = await handleChatSlashInput({
+        locale: loc,
+        trimmed,
+        setHistory,
+        write: (s) => setTranscript((t) => t + s),
+        persistEmpty,
+      });
+      if (slash === "exit") {
+        await persist(history);
+        exit();
+        return;
+      }
+      if (slash === "again") {
+        return;
+      }
+
       setInput("");
       setBusy(true);
       setStreaming("");
-      setTranscript((t) => `${t}\n> ${trimmed}\n`);
+      const you = tr(loc, "chatReplYou");
+      setTranscript((t) => `${t}\n${you} › ${trimmed}\n`);
 
       const confirmFn = props.skipConfirm ? async () => true : makeConfirm();
 
@@ -132,14 +179,10 @@ function ChatTuiInner(
         });
         setHistory(next);
         await persist(next);
-        if (props.useStream) {
-          setTranscript((t) => `${t}${assistantText}\n`);
-          setStreaming("");
-        } else {
-          setTranscript((t) => `${t}${assistantText}\n`);
-        }
+        setTranscript((t) => `${t}assistant\n${assistantText}\n`);
+        setStreaming("");
       } catch (e) {
-        setTranscript((t) => `${t}[error] ${String(e)}\n`);
+        setTranscript((t) => `${t}\n[error] ${String(e)}\n`);
         setStreaming("");
       } finally {
         setBusy(false);
@@ -152,6 +195,7 @@ function ChatTuiInner(
       history,
       makeConfirm,
       persist,
+      persistEmpty,
       loc,
       props.cfg.maxAgentSteps,
       props.cfg.maxHistoryItems,
@@ -169,19 +213,65 @@ function ChatTuiInner(
     ],
   );
 
+  const chromePanel = plain ? (
+    <Box flexDirection="column" marginBottom={1}>
+      <Text>
+        {chrome.title} — {chrome.subtitle}
+      </Text>
+      <Text dimColor>{chrome.modelLine}</Text>
+      <Text dimColor>{chrome.workspaceLine}</Text>
+      {chrome.branchLine ? <Text dimColor>{chrome.branchLine}</Text> : null}
+      {chrome.sessionLine ? <Text dimColor>{chrome.sessionLine}</Text> : null}
+      <Text dimColor>{chrome.badges}</Text>
+      <Text dimColor>{chrome.hint}</Text>
+    </Box>
+  ) : (
+    <Box flexDirection="column" marginBottom={1} borderStyle="round" borderColor="gray" paddingX={1}>
+      <Box>
+        <Text bold color="white">
+          {chrome.title}
+        </Text>
+        <Text dimColor> — </Text>
+        <Text dimColor italic>
+          {chrome.subtitle}
+        </Text>
+      </Box>
+      <Text dimColor>{chrome.modelLine}</Text>
+      <Text dimColor>{chrome.workspaceLine}</Text>
+      {chrome.branchLine ? <Text dimColor>{chrome.branchLine}</Text> : null}
+      {chrome.sessionLine ? <Text dimColor>{chrome.sessionLine}</Text> : null}
+      <Text color="cyan">{chrome.badges}</Text>
+      <Text dimColor>{chrome.hint}</Text>
+    </Box>
+  );
+
   if (confirmState) {
+    const c = confirmState;
+    const confirmBox = plain ? (
+      <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1} marginBottom={1}>
+        <Text bold>
+          {tr(loc, "confirmTitle")} {c.title}
+        </Text>
+        <Text>{c.body}</Text>
+      </Box>
+    ) : (
+      <Box flexDirection="column" borderStyle="single" borderColor="blue" paddingX={1} marginBottom={1}>
+        <Text bold color="yellow">
+          {tr(loc, "confirmTitle")} {c.title}
+        </Text>
+        <Text>{c.body}</Text>
+      </Box>
+    );
     return (
       <Box flexDirection="column">
+        {chromePanel}
         <Box marginBottom={1}>
           <Text dimColor>
             {transcript}
             {streaming}
           </Text>
         </Box>
-        <Text bold color="yellow">
-          {tr(loc, "confirmTitle")} {confirmState.title}
-        </Text>
-        <Text>{confirmState.body}</Text>
+        {confirmBox}
         <Text dimColor>{tr(loc, "tuiConfirmYes")}</Text>
       </Box>
     );
@@ -189,18 +279,32 @@ function ChatTuiInner(
 
   return (
     <Box flexDirection="column">
-      <Box marginBottom={1}>
-        <Text dimColor>
-          {transcript}
-          {streaming}
-        </Text>
+      {chromePanel}
+      <Box marginBottom={1} flexDirection="column">
+        <Text dimColor>{transcript}</Text>
+        {streaming ? (
+          <Box flexDirection="column">
+            <Text dimColor>assistant</Text>
+            <Text>{streaming}</Text>
+          </Box>
+        ) : null}
       </Box>
       {busy ? (
-        <Text color="cyan">{tr(loc, "tuiBusy")}</Text>
+        plain ? (
+          <Text dimColor>{tr(loc, "tuiBusy")}</Text>
+        ) : (
+          <Text color="cyan">{tr(loc, "tuiBusy")}</Text>
+        )
       ) : (
         <Box>
-          <Text color="green">{"> "}</Text>
-          <TextInput value={input} onChange={setInput} onSubmit={onSubmit} />
+          <Text color={plain ? undefined : "gray"}>{plain ? "> " : "› "}</Text>
+          <TextInput
+            value={input}
+            onChange={setInput}
+            onSubmit={(value) => {
+              void onSubmit(value);
+            }}
+          />
         </Box>
       )}
     </Box>
@@ -208,6 +312,7 @@ function ChatTuiInner(
 }
 
 export async function runChatTui(options: RunChatTuiOptions): Promise<void> {
+  const plain = options.plainCli || process.env.INARI_PLAIN === "1";
   const cfg = await loadConfig(options.cwd);
   const provider = createLlmProvider(cfg);
   const system = createChatSystemPrompt(options.workspaceRoot);
@@ -223,6 +328,7 @@ export async function runChatTui(options: RunChatTuiOptions): Promise<void> {
   const initialHistory: AgentHistoryItem[] = sessionPath
     ? await loadSessionFile(sessionPath)
     : [];
+  const gitBranch = await getWorkspaceGitBranch(options.workspaceRoot);
 
   const { render } = await import("ink");
   const { waitUntilExit } = render(
@@ -238,6 +344,8 @@ export async function runChatTui(options: RunChatTuiOptions): Promise<void> {
       embeddingClient={cfg.embeddings.client}
       sessionPath={sessionPath}
       initialHistory={initialHistory}
+      gitBranch={gitBranch}
+      plain={plain}
     />,
   );
   await waitUntilExit();

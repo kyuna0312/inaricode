@@ -137,7 +137,7 @@ export async function runSemanticCodebaseSearch(params: {
 }): Promise<Record<string, unknown>> {
   const { workspaceRoot, client, query, maxResults, maxFiles, refreshIndex, signal } = params;
   const cp = cachePath(workspaceRoot);
-  let cache = refreshIndex
+  const cache = refreshIndex
     ? { v: 1 as const, model: client.model, baseURL: client.baseURL, entries: {} }
     : await loadCache(cp, client);
 

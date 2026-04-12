@@ -126,7 +126,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
       const sorted = [...toolAcc.entries()].sort((a, b) => a[0] - b[0]);
       for (const [idx, row] of sorted) {
         if (!row.name) continue;
-        let input: Record<string, unknown> = {};
+        let input: Record<string, unknown>;
         try {
           input = JSON.parse(row.args || "{}") as Record<string, unknown>;
         } catch {
@@ -152,7 +152,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
     for (const tc of msg?.tool_calls ?? []) {
       if (tc.type !== "function") continue;
-      let input: Record<string, unknown> = {};
+      let input: Record<string, unknown>;
       try {
         input = JSON.parse(tc.function.arguments || "{}") as Record<string, unknown>;
       } catch {

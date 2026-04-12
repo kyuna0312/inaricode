@@ -1,6 +1,9 @@
 {
   "name": "@inaricode/cli",
   "version": "0.1.0",
+  "inaricode": {
+    "codename": "Sakura"
+  },
   "license": "MIT",
   "description": "InariCode CLI — AI coding assistant driver",
   "type": "module",
