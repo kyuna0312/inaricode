@@ -53,7 +53,8 @@ const EGUNE_OPENAI_PRESET: OpenAiPreset = {
   envKeys: ["EGUNE_API_KEY", "EGUNA_API_KEY"],
 };
 
-const OPENAI_PRESETS: Record<Exclude<ProviderId, "anthropic">, OpenAiPreset> = {
+/** OpenAI-compatible presets (exported for `inari providers` catalog). */
+export const OPENAI_PRESETS: Record<Exclude<ProviderId, "anthropic">, OpenAiPreset> = {
   openai: {
     baseURL: "https://api.openai.com/v1",
     defaultModel: "gpt-4o-mini",
@@ -156,6 +157,11 @@ const RawConfigSchema = z
         defaultFileGlob: z.string().min(1).optional().default("**/*"),
       })
       .optional(),
+    /**
+     * Per-provider API keys (YAML-friendly). Used when `apiKey` is empty: picks `keys[provider]`.
+     * Example: `provider: openai` + `keys: { openai: "sk-..." }`.
+     */
+    keys: z.record(z.string(), z.string()).optional(),
   })
   .superRefine((val, ctx) => {
     if (val.provider === "custom" && !val.baseURL) {
@@ -166,6 +172,11 @@ const RawConfigSchema = z
       });
     }
   });
+
+export type RawInariConfig = z.infer<typeof RawConfigSchema>;
+
+/** Default Anthropic model when `model` is omitted in config. */
+export const ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-4-20250514";
 
 export type InariConfig = {
   provider: ProviderId;
@@ -192,16 +203,18 @@ export type InariConfig = {
   };
 };
 
-export async function writeExampleConfig(cwd: string, locale: Locale = "en"): Promise<string> {
+export type InariInitConfigFormat = "yaml" | "cjs";
+
+async function writeExampleCjsConfig(cwd: string, locale: Locale): Promise<string> {
   const path = join(cwd, "inaricode.config.cjs");
   const langLine =
     locale === "mn"
       ? `// Хэл: locale: 'mn' (Монгол) эсвэл INARI_LANG=mn — CLI, doctor, chat интерфэйс.\n`
       : `// Language: locale: 'mn' or INARI_LANG=mn for Mongolian UI (CLI, doctor, chat).\n`;
-  const body = `// InariCode — API keys via env or apiKey below
+  const body = `// InariCode — API keys: env, top-level apiKey, or keys: { } map (see also inaricode.yaml from inari init).
 // Release tag: packages/cli/package.json → version (semver), patch is the third number,
 //   flower name: optional inaricode.codename, else derived from version (see src/release-flowers.ts).
-// Cursor IDE: docs/integrations/cursor.md (project rules, terminal, roadmap MCP).
+// Cursor: docs/integrations/cursor.md — inari cursor (Cloud API); .cursor/ is gitignored (copy rule examples from docs if you want).
 ${langLine}// Providers:
 //   anthropic     → ANTHROPIC_API_KEY
 //   openai        → OPENAI_API_KEY (ChatGPT)
@@ -225,6 +238,8 @@ ${langLine}// Providers:
 // Optional Phase 3+ semantic search: OpenAI-compatible /embeddings (uses OPENAI_API_KEY for Anthropic users by default)
 //   embeddings: { enabled: true, model: 'text-embedding-3-small' }
 // UI: locale 'en' | 'mn' (overridden by INARI_LANG)
+// Switch model without editing file: INARI_PROVIDER=ollama INARI_MODEL=mistral  (optional INARI_BASE_URL for custom host)
+// List backends: inari providers list   |   one-off: inari chat --provider openai --model gpt-4o-mini
 // Picker (inari pick): picker: { mode: 'builtin' | 'fzf', fzfPath: 'fzf', defaultFileGlob: '**/*.{ts,tsx,js}' }
 module.exports = {
   provider: 'anthropic',
@@ -234,6 +249,7 @@ module.exports = {
   streaming: true,
   readOnly: false,
   maxHistoryItems: 100,
+  // keys: { anthropic: process.env.ANTHROPIC_API_KEY, openai: process.env.OPENAI_API_KEY },
   // baseURL: 'https://example.com/v1',
   // apiKey: process.env.ANTHROPIC_API_KEY,
   // sidecar: { enabled: true },
@@ -242,6 +258,75 @@ module.exports = {
 `;
   await writeFile(path, body, "utf8");
   return path;
+}
+
+async function writeExampleYamlConfig(cwd: string, locale: Locale): Promise<string> {
+  const path = join(cwd, "inaricode.yaml");
+  const langLine =
+    locale === "mn"
+      ? "# Хэл: locale: mn эсвэл INARI_LANG=mn — CLI, doctor, chat.\n"
+      : "# Language: locale: mn or INARI_LANG=mn for Mongolian UI (CLI, doctor, chat).\n";
+  const body = `# InariCode — paste API keys under keys: (or use env vars). Empty "" = use env.
+# This file is found before inaricode.config.cjs. Run: inari init --format cjs for the JS template.
+# Release / codename: packages/cli/package.json; Cursor: docs/integrations/cursor.md
+${langLine}# Providers (env fallbacks when a key is empty):
+#   anthropic, openai, kimi, qwen, ollama, groq, together, egune, eguna, mongol_ai, huggingface, google, custom
+#
+# Optional: INARI_PROVIDER / INARI_MODEL / INARI_BASE_URL — inari providers list — inari chat --provider …
+
+provider: anthropic
+model: claude-sonnet-4-20250514
+locale: ${locale}
+
+maxAgentSteps: 25
+streaming: true
+readOnly: false
+maxHistoryItems: 100
+
+# Top-level apiKey works too; keys: is easier when you switch provider often.
+# apiKey: ""
+
+keys:
+  anthropic: ""
+  openai: ""
+  kimi: ""
+  qwen: ""
+  ollama: ""
+  groq: ""
+  together: ""
+  egune: ""
+  eguna: ""
+  mongol_ai: ""
+  huggingface: ""
+  google: ""
+  custom: ""
+
+# baseURL: "https://example.com/v1"
+# sidecar:
+#   enabled: false
+# embeddings:
+#   enabled: false
+# picker:
+#   mode: builtin
+#   fzfPath: fzf
+#   defaultFileGlob: "**/*"
+`;
+  await writeFile(path, body, "utf8");
+  return path;
+}
+
+/** Write a starter config: default **yaml** with \`keys:\`; use \`format: "cjs"\` for \`inaricode.config.cjs\`. */
+export async function writeExampleInariConfig(
+  cwd: string,
+  locale: Locale = "en",
+  format: InariInitConfigFormat = "yaml",
+): Promise<string> {
+  return format === "cjs" ? writeExampleCjsConfig(cwd, locale) : writeExampleYamlConfig(cwd, locale);
+}
+
+/** Writes \`inaricode.yaml\` (same as \`writeExampleInariConfig(cwd, locale, "yaml")\`). */
+export async function writeExampleConfig(cwd: string, locale: Locale = "en"): Promise<string> {
+  return writeExampleInariConfig(cwd, locale, "yaml");
 }
 
 function resolvedLocale(c: z.infer<typeof RawConfigSchema>): Locale {
@@ -254,6 +339,43 @@ function firstEnv(keys: string[]): string | undefined {
     if (v && v.length > 0) return v;
   }
   return undefined;
+}
+
+/** Treat whitespace-only or empty strings as unset (YAML often uses `""`). */
+function nonEmpty(s: string | undefined): string | undefined {
+  if (typeof s !== "string") return undefined;
+  const t = s.trim();
+  return t.length > 0 ? t : undefined;
+}
+
+function normalizeRawEmptyStrings(c: RawInariConfig): RawInariConfig {
+  const next: RawInariConfig = { ...c, apiKey: nonEmpty(c.apiKey) };
+  if (c.keys) {
+    const cleaned: Record<string, string> = {};
+    for (const [k, v] of Object.entries(c.keys)) {
+      const nv = nonEmpty(v);
+      if (nv) cleaned[k] = nv;
+    }
+    next.keys = Object.keys(cleaned).length > 0 ? cleaned : undefined;
+  }
+  return next;
+}
+
+function providerKeyLookupOrder(provider: ProviderId): string[] {
+  if (provider === "eguna") return ["eguna", "egune"];
+  if (provider === "egune") return ["egune", "eguna"];
+  return [provider];
+}
+
+/** When `apiKey` is unset, fill from `keys[provider]` (and eguna/egune alias). */
+function applyKeysMapToApiKey(c: RawInariConfig): RawInariConfig {
+  if (nonEmpty(c.apiKey)) return c;
+  if (!c.keys) return c;
+  for (const id of providerKeyLookupOrder(c.provider)) {
+    const k = nonEmpty(c.keys[id]);
+    if (k) return { ...c, apiKey: k };
+  }
+  return c;
 }
 
 function pickerFromParsed(c: z.infer<typeof RawConfigSchema>): InariConfig["picker"] {
@@ -303,13 +425,13 @@ function embeddingsFromParsed(
 
   if (chat.provider === "anthropic") {
     const baseURL = (emb.baseURL ?? "https://api.openai.com/v1").replace(/\/$/, "");
-    const apiKey = emb.apiKey ?? firstEnv(["OPENAI_API_KEY", "INARI_EMBEDDING_API_KEY"]);
+    const apiKey = nonEmpty(emb.apiKey) ?? firstEnv(["OPENAI_API_KEY", "INARI_EMBEDDING_API_KEY"]);
     if (!apiKey) return { client: null };
     return { client: { baseURL, apiKey, model } };
   }
 
   const baseURL = (emb.baseURL ?? chat.baseURL).replace(/\/$/, "");
-  const apiKey = emb.apiKey ?? chat.apiKey;
+  const apiKey = nonEmpty(emb.apiKey) ?? chat.apiKey;
   return { client: { baseURL, apiKey, model } };
 }
 
@@ -327,7 +449,8 @@ export async function loadSidecarDoctorInfo(searchFrom: string): Promise<InariCo
   return sidecarFromParsed(parsed.data);
 }
 
-export async function loadConfig(searchFrom: string): Promise<InariConfig> {
+/** Load and validate raw config from disk (no env/CLI overrides). */
+export async function loadRawInariConfig(searchFrom: string): Promise<RawInariConfig> {
   const explorer = cosmiconfig("inaricode", {
     searchPlaces: [...INARICODE_CONFIG_SEARCH_PLACES],
   });
@@ -338,14 +461,57 @@ export async function loadConfig(searchFrom: string): Promise<InariConfig> {
     const msg = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
     throw new Error(`Invalid inaricode config: ${msg}`);
   }
-  const c = parsed.data;
+  return parsed.data;
+}
+
+/**
+ * Env overrides (highest priority after CLI patch): INARI_PROVIDER, INARI_MODEL, INARI_BASE_URL.
+ * Use to switch chat backend without editing config files, e.g. `INARI_PROVIDER=ollama INARI_MODEL=mistral inari chat`.
+ */
+export function applyInariEnvOverrides(c: RawInariConfig): RawInariConfig {
+  const next: RawInariConfig = { ...c };
+  const ep = process.env.INARI_PROVIDER?.trim().toLowerCase();
+  if (ep) {
+    const r = ProviderIdSchema.safeParse(ep);
+    if (r.success) next.provider = r.data;
+  }
+  const m = process.env.INARI_MODEL?.trim();
+  if (m) next.model = m;
+  const u = process.env.INARI_BASE_URL?.trim();
+  if (u) {
+    const urlTry = z.string().url().safeParse(u);
+    if (urlTry.success) next.baseURL = urlTry.data;
+  }
+  return next;
+}
+
+export type ChatConfigCliOverrides = { provider?: string; model?: string };
+
+function applyChatCliOverrides(c: RawInariConfig, cli?: ChatConfigCliOverrides): RawInariConfig {
+  if (!cli?.provider && !cli?.model) return c;
+  const next: RawInariConfig = { ...c };
+  if (cli.provider) {
+    const r = ProviderIdSchema.safeParse(cli.provider.trim().toLowerCase());
+    if (!r.success) {
+      throw new Error(
+        `Invalid --provider "${cli.provider}". Use: inari providers list  (or see inaricode.yaml / inaricode.config.cjs comments)`,
+      );
+    }
+    next.provider = r.data;
+  }
+  if (cli.model?.trim()) next.model = cli.model.trim();
+  return next;
+}
+
+/** Build runtime config from merged raw (after env + optional CLI overrides). */
+export function resolveConfigFromRaw(c: RawInariConfig): InariConfig {
   const shellPolicy = resolveShellPolicy(c.shell);
   const sidecar = sidecarFromParsed(c);
   const picker = pickerFromParsed(c);
 
   if (c.provider === "anthropic") {
-    const model = c.model ?? "claude-sonnet-4-20250514";
-    const apiKey = c.apiKey ?? firstEnv(["ANTHROPIC_API_KEY"]);
+    const model = c.model ?? ANTHROPIC_DEFAULT_MODEL;
+    const apiKey = nonEmpty(c.apiKey) ?? firstEnv(["ANTHROPIC_API_KEY"]);
     if (!apiKey) {
       throw new Error("Missing API key: set apiKey or ANTHROPIC_API_KEY for provider anthropic");
     }
@@ -373,7 +539,7 @@ export async function loadConfig(searchFrom: string): Promise<InariConfig> {
     throw new Error(`Missing baseURL for provider ${c.provider}`);
   }
   const model = c.model ?? preset.defaultModel;
-  let apiKey = c.apiKey ?? firstEnv(preset.envKeys);
+  let apiKey = nonEmpty(c.apiKey) ?? firstEnv(preset.envKeys);
   if (!apiKey && preset.apiKeyOptional) {
     apiKey = "ollama";
   }
@@ -401,4 +567,16 @@ export async function loadConfig(searchFrom: string): Promise<InariConfig> {
     locale: resolvedLocale(c),
     picker,
   };
+}
+
+export async function loadConfig(
+  searchFrom: string,
+  cli?: ChatConfigCliOverrides,
+): Promise<InariConfig> {
+  let raw = await loadRawInariConfig(searchFrom);
+  raw = normalizeRawEmptyStrings(raw);
+  raw = applyInariEnvOverrides(raw);
+  raw = applyChatCliOverrides(raw, cli);
+  raw = applyKeysMapToApiKey(raw);
+  return resolveConfigFromRaw(raw);
 }

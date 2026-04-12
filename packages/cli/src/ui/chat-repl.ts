@@ -46,9 +46,15 @@ export async function runChatRepl(options: {
   readOnlyCli: boolean;
   plainCli: boolean;
   signal?: AbortSignal;
+  /** Override config / env for this session (same as `inari chat --provider` / `--model`). */
+  providerCli?: string;
+  modelCli?: string;
 }): Promise<void> {
   const plain = options.plainCli || process.env.INARI_PLAIN === "1";
-  const cfg = await loadConfig(options.cwd);
+  const cfg = await loadConfig(options.cwd, {
+    provider: options.providerCli,
+    model: options.modelCli,
+  });
   const provider = createLlmProvider(cfg);
   const system = createChatSystemPrompt(options.workspaceRoot);
   const readOnly = cfg.readOnly || options.readOnlyCli;

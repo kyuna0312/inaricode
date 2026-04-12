@@ -1,3 +1,4 @@
 # Integrations
 
-- **[Cursor IDE](cursor.md)** — using this repo with Cursor (rules, terminal, `yarn cli`, roadmap note for MCP).
+- **[Cursor IDE + API](cursor.md)** — local **`.cursor/`** (gitignored), **`yarn cli cursor`** (Cloud Agents API), env vars.
+- **[`cursor-rules.example.md`](cursor-rules.example.md)** — copy-paste **project rules** for your machine only.

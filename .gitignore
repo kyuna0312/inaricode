@@ -1,7 +1,4 @@
-# Cursor: keep shared project rules; ignore local plans / state
-.cursor/*
-!.cursor/rules/
-!.cursor/rules/**
+.cursor/
 
 .turbo/
 node_modules/
@@ -19,6 +16,8 @@ packages/engine-native/*.node
 
 # Local config from `yarn cli init` while hacking on the repo itself
 /inaricode.config.cjs
+/inaricode.yaml
+/inaricode.yml
 
 # Accidental tsc output next to Vitest tests (emit belongs in dist/)
 packages/cli/test/**/*.js

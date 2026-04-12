@@ -2,9 +2,17 @@
 
 Short rules aligned with common **Linux / OSS** CLI practice (predictable tooling, strict types, CI parity).
 
+## LLM providers (chat)
+
+- **Config file:** Prefer **`inaricode.yaml`** (`keys:` per provider) or `inaricode.config.cjs` → `provider` + `model` (Anthropic, OpenAI, Kimi, Ollama, Groq, Gemini, HF router, `custom`, …). YAML is searched before `.cjs` when both exist.
+- **Env (session override):** `INARI_PROVIDER`, `INARI_MODEL`, optional `INARI_BASE_URL` — applied after file config, before CLI flags.
+- **CLI one-off:** `inari chat --provider ollama --model llama3.2`.
+- **Catalog:** `inari providers list` / `inari providers show <id>` (includes **Cursor** cloud row; REPL chat uses `inari cursor`, not `provider: cursor`).
+
 ## Cursor IDE
 
-- Integration guide: **`docs/integrations/cursor.md`**. Shared rules live in **`.cursor/rules/`** (versioned); use **`yarn cli`** in Cursor’s terminal from the repo root.
+- **`docs/integrations/cursor.md`** — local **`.cursor/`** (not in git); **`yarn cli cursor …`** with **`CURSOR_API_KEY`** for [Cloud Agents API](https://cursor.com/docs/cloud-agent/api/endpoints).
+- Optional rules: copy from **`docs/integrations/cursor-rules.example.md`** into your own **`.cursor/rules/*.mdc`**.
 
 ## Release version line
 

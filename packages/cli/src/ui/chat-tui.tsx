@@ -33,6 +33,8 @@ export type RunChatTuiOptions = {
   readOnlyCli: boolean;
   plainCli: boolean;
   signal?: AbortSignal;
+  providerCli?: string;
+  modelCli?: string;
 };
 
 type Bootstrapped = {
@@ -313,7 +315,10 @@ function ChatTuiInner(
 
 export async function runChatTui(options: RunChatTuiOptions): Promise<void> {
   const plain = options.plainCli || process.env.INARI_PLAIN === "1";
-  const cfg = await loadConfig(options.cwd);
+  const cfg = await loadConfig(options.cwd, {
+    provider: options.providerCli,
+    model: options.modelCli,
+  });
   const provider = createLlmProvider(cfg);
   const system = createChatSystemPrompt(options.workspaceRoot);
   const readOnly = cfg.readOnly || options.readOnlyCli;

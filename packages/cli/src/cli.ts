@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { Command } from "commander";
-import { loadConfig, loadSidecarDoctorInfo, writeExampleConfig } from "./config.js";
+import { Command, Option } from "commander";
+import { loadConfig, loadSidecarDoctorInfo, writeExampleInariConfig } from "./config.js";
 import { engineRequest, resolveEngineBinary, resolveEngineTransport } from "./engine/client.js";
 import { sidecarRpc } from "./sidecar/client.js";
 import { pingEmbeddings } from "./tools/embeddings-api.js";
@@ -12,6 +12,8 @@ import {
 } from "./ui/logo.js";
 import { loadLocalePreference, type Locale } from "./i18n/locale.js";
 import { tr, type MessageKey } from "./i18n/strings.js";
+import { registerCursorCommand } from "./cursor-api/run-cursor-cli.js";
+import { registerProvidersCommand } from "./providers/run-providers-cli.js";
 
 const versionLine = cliVersionLine();
 
@@ -54,8 +56,11 @@ async function main(): Promise<void> {
   program
     .command("init")
     .description(L("cmdInit"))
-    .action(async () => {
-      const p = await writeExampleConfig(cwd, locale);
+    .addOption(
+      new Option("--format <fmt>", L("optInitFormat")).choices(["yaml", "cjs"] as const).default("yaml"),
+    )
+    .action(async (opts: { format: "yaml" | "cjs" }) => {
+      const p = await writeExampleInariConfig(cwd, locale, opts.format);
       process.stdout.write(`${L("initWrote", { path: p })}\n`);
     });
 
@@ -119,6 +124,9 @@ async function main(): Promise<void> {
         process.stdout.write(`${L("doctorEmbeddingsSkipped")}\n`);
       }
     });
+
+  registerCursorCommand(program, L);
+  registerProvidersCommand(program, L);
 
   const media = program.command("media").description(L("cmdMedia"));
   media
@@ -191,6 +199,8 @@ async function main(): Promise<void> {
     .option("--read-only", L("optReadOnly"), false)
     .option("--tui", L("optTui"), false)
     .option("--plain", L("optPlain"), false)
+    .option("--provider <id>", L("optChatProvider"))
+    .option("--model <id>", L("optChatModel"))
     .action(
       async (opts: {
         root: string;
@@ -200,6 +210,8 @@ async function main(): Promise<void> {
         readOnly: boolean;
         tui: boolean;
         plain: boolean;
+        provider?: string;
+        model?: string;
       }) => {
         const { resolveWorkspaceRoot } = await import("./ui/chat-repl.js");
         const workspaceRoot = resolveWorkspaceRoot(opts.root || undefined, cwd);
@@ -211,6 +223,8 @@ async function main(): Promise<void> {
           noStream: Boolean(opts.noStream),
           readOnlyCli: Boolean(opts.readOnly),
           plainCli: Boolean(opts.plain),
+          providerCli: opts.provider,
+          modelCli: opts.model,
         };
         if (opts.tui) {
           const { runChatTui } = await import("./ui/chat-tui.js");

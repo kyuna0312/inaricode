@@ -6,10 +6,12 @@
 
 ## Features
 
-- **`inari chat`** — REPL or **`--tui`** (Ink): streaming, **`--session`**, **`--plain`**, slash commands (`/help`, `/clear`, `/exit`), optional **git branch** in the header  
+- **`inari chat`** — REPL or **`--tui`** (Ink): streaming, **`--session`**, **`--plain`**, **`--provider`** / **`--model`** (override config), slash commands; optional **git branch** in the header  
+- **`inari providers`** — list **Anthropic, ChatGPT, Kimi, Ollama, Groq, Gemini, HF, …** + **Cursor** (usage row); switch via config, **`INARI_PROVIDER`** / **`INARI_MODEL`**, or chat flags  
 - **`inari pick`** — **fuzzy** file chooser (built-in or **`fzf`**); respects `.gitignore` / `.inariignore`  
 - **`inari completion`** — **`zsh`**, **`fish`**, **`bash`** completion scripts  
 - **`inari doctor`** — engine IPC, optional Python sidecar, embeddings check  
+- **`inari cursor`** — Cursor **Cloud Agents API** (`CURSOR_API_KEY`): list/status/launch agents, models, etc.  
 - **`inari init`** / **`inari logo`** — starter config and branding  
 - **`inari media`** — Hugging Face text-to-image (and video guidance stub)  
 - **Rust `inaricode-engine`** — JSON-line IPC + **Node native** bindings for the same dispatch  
@@ -17,9 +19,11 @@
 
 UI strings: **English** and **Mongolian** (`locale` / `INARI_LANG`).
 
-## Cursor IDE
+## Cursor IDE & Cloud API
 
-Developing **in** Cursor? See **[`docs/integrations/cursor.md`](docs/integrations/cursor.md)** for project rules (`.cursor/rules/`), **`AGENTS.md`**, terminal **`yarn cli`**, and how InariCode complements the editor. A future **MCP** link is on the [plan](docs/plan/inari-code-plan.md).
+- **`.cursor/`** is **gitignored**; keep rules local. Example snippets: **[`docs/integrations/cursor-rules.example.md`](docs/integrations/cursor-rules.example.md)**.
+- **`yarn cli cursor`** talks to Cursor’s **Cloud Agents API** when **`CURSOR_API_KEY`** is set — see **[`docs/integrations/cursor.md`](docs/integrations/cursor.md)**.
+- **`AGENTS.md`** and terminal **`yarn cli`** still apply. **MCP** roadmap: [plan](docs/plan/inari-code-plan.md).
 
 ## Requirements
 
@@ -81,12 +85,13 @@ yarn build:engine
 
 Cosmiconfig searches for **`inaricode`** under the current working directory, in this order:
 
+- `inaricode.yaml` / `inaricode.yml` (recommended — use a `keys:` map per provider)
 - `inaricode.config.cjs` / `.mjs` / `.js`
 - `.inaricoderc.json` / `.yaml` / `.yml`
 
-Run **`inari init`** to create `inaricode.config.cjs` with comments.
+Run **`inari init`** (default) to create **`inaricode.yaml`** with a `keys:` section, or **`inari init --format cjs`** for `inaricode.config.cjs`.
 
-Set API keys and provider options in that file (see the generated template). Do not commit secrets; use env vars where your setup allows.
+If both YAML and `.cjs` exist, the YAML file wins (it is listed first). Set API keys under `keys.<provider>` or `apiKey`, or use env vars (see the template comments). Do not commit secrets.
 
 ### Language (English / Mongolian)
 
@@ -99,7 +104,7 @@ Set API keys and provider options in that file (see the generated template). Do 
 |---------|---------|
 | `inari chat` | Start chat (add `--tui` for terminal UI) |
 | `inari doctor` | Verify engine, sidecar, embeddings |
-| `inari init` | Write example config |
+| `inari init` | Write example **`inaricode.yaml`** (`--format cjs` for `inaricode.config.cjs`) |
 | `inari logo` | ASCII banner + bundled mascot path |
 | `inari media image` | Text-to-image via **Hugging Face Inference API** (`HF_TOKEN`) |
 | `inari media video` | Prints guidance (text-to-video is vendor-specific; not bundled yet) |
