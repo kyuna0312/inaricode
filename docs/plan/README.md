@@ -1,7 +1,7 @@
 # InariCode planning docs
 
-This folder holds the product/architecture plan that was originally authored in Cursor (`inaricode_cli_assistant_8a5f93f5`). The canonical copy for the repository is:
+Canonical roadmap and architecture:
 
-- [`inari-code-plan.md`](./inari-code-plan.md)
+- **[`inari-code-plan.md`](./inari-code-plan.md)** — current capabilities, **prioritized backlog (P0–P3)**, non-goals, risks, and phased history.
 
-Update this file when major milestones change so contributors and agents share the same roadmap.
+The plan is optimized for **decisions**: outcomes first, dependency order, time horizons, and measurable “done” criteria. Update the **At a glance** table and **Prioritized backlog** when milestones shift so contributors and tooling stay aligned.

@@ -1,6 +1,6 @@
 ---
 name: InariCode CLI Assistant
-overview: "TS CLI + agent loop + multi-vendor LLM (Anthropic + OpenAI-compatible); Rust inaricode-engine for sandboxed fs/grep/patch/shell; optional C++/Python later."
+overview: "TS CLI + agent loop + multi-vendor LLM; Rust engine (sandboxed tools); optional Python sidecar + remote embeddings; EN/MN UI; future: packaging, tree-sitter, optional C++ hot path."
 todos:
   - id: scaffold
     content: "Monorepo (Yarn workspaces), packages/cli + packages/engine"
@@ -21,37 +21,62 @@ todos:
     content: "Phase 3 — .inariignore (grep); tool redaction; Python sidecar codebase_search (BM25)"
     status: completed
   - id: phase3plus-semantic
-    content: "Phase 3+ — semantic_codebase_search (OpenAI /embeddings + cache); symbol_outline; globby index"
+    content: "Phase 3+ — semantic_codebase_search (embeddings API + cache); symbol_outline; globby index"
+    status: completed
+  - id: i18n-en-mn
+    content: "CLI/TUI/REPL strings — English + Mongolian (locale, INARI_LANG)"
     status: completed
   - id: cpp-hotpath
     content: "Optional C++ (mmap/fast scan) via cxx from Rust"
     status: pending
-  - id: python-sidecar
-    content: "Optional Python — embeddings, codebase_search, JSON-RPC from CLI"
-    status: completed
-source: "Cursor plan inaricode_cli_assistant_8a5f93f5; canonical copy for the repo"
+  - id: release-packaging
+    content: "Phase 4 — npm/publish story, prebuilt engine-native binaries or doc’d build matrix, CI (lint/test/build)"
+    status: pending
+  - id: quality-ast-summaries
+    content: "tree-sitter outlines; long-thread summarization; stronger multi-file patch UX"
+    status: pending
+source: "Canonical repo plan; original Cursor id inaricode_cli_assistant_8a5f93f5"
 ---
 
 # InariCode — plan
 
-## At a glance
+## Where we are
+
+The **core product loop is done**: chat (REPL + TUI), multi-provider LLM with streaming, agent loop with confirmations, Rust engine IPC + native binding, session files, semantic search (remote embeddings + cache), BM25 sidecar, redaction, `.inariignore`, and **English / Mongolian** UI. What remains is mostly **polish, accuracy, performance, and distribution** — not greenfield architecture.
 
 | Area | Status | Where |
 |------|--------|--------|
-| CLI | `inari init`, `doctor`, `chat` (`--tui`) | [`packages/cli/src/cli.ts`](../../packages/cli/src/cli.ts) |
-| Engine | JSON-line IPC + **napi** `ipcRequest` (same dispatch) | [`packages/engine`](../../packages/engine), [`packages/engine-native`](../../packages/engine-native) |
-| LLM | Anthropic + OpenAI-compatible presets | [`packages/cli/src/config.ts`](../../packages/cli/src/config.ts), [`packages/cli/src/llm/`](../../packages/cli/src/llm/) |
+| CLI | `init`, `doctor`, `chat` (`--tui`) | [`packages/cli/src/cli.ts`](../../packages/cli/src/cli.ts) |
+| i18n | `en` / `mn` (`locale`, `INARI_LANG`) | [`packages/cli/src/i18n/`](../../packages/cli/src/i18n/) |
+| Engine | JSON-line IPC + napi `ipcRequest` | [`packages/engine`](../../packages/engine), [`packages/engine-native`](../../packages/engine-native) |
+| LLM | Anthropic + OpenAI-compatible | [`packages/cli/src/config.ts`](../../packages/cli/src/config.ts), [`packages/cli/src/llm/`](../../packages/cli/src/llm/) |
 | Agent | Turn loop, tool → engine / sidecar | [`packages/cli/src/agent/loop.ts`](../../packages/cli/src/agent/loop.ts) |
-| Session | JSON load/save for `chat --session` | [`packages/cli/src/session/file-session.ts`](../../packages/cli/src/session/file-session.ts) |
-| Sidecar | Python BM25 `codebase_search` (optional) | [`packages/sidecar/inari_sidecar.py`](../../packages/sidecar/inari_sidecar.py), [`packages/cli/src/sidecar/`](../../packages/cli/src/sidecar/) |
-| Semantic search | `semantic_codebase_search` via **`/embeddings`** + `.inaricode/semantic-cache-v1.json` | [`packages/cli/src/tools/semantic-search.ts`](../../packages/cli/src/tools/semantic-search.ts), [`embeddings-api.ts`](../../packages/cli/src/tools/embeddings-api.ts) |
-| Outline | `symbol_outline` (regex, not tree-sitter) | [`packages/cli/src/tools/symbol-outline.ts`](../../packages/cli/src/tools/symbol-outline.ts) |
+| Session | JSON load/save (`--session`) | [`packages/cli/src/session/file-session.ts`](../../packages/cli/src/session/file-session.ts) |
+| Sidecar | Python BM25 `codebase_search` (optional) | [`packages/sidecar/`](../../packages/sidecar/), [`packages/cli/src/sidecar/`](../../packages/cli/src/sidecar/) |
+| Semantic | `/embeddings` + `.inaricode/semantic-cache-v1.json` | [`semantic-search.ts`](../../packages/cli/src/tools/semantic-search.ts), [`embeddings-api.ts`](../../packages/cli/src/tools/embeddings-api.ts) |
+| Outline | `symbol_outline` (regex heuristics) | [`symbol-outline.ts`](../../packages/cli/src/tools/symbol-outline.ts) |
 
-**Gap vs ideal:** **C++** mmap hot path and **full tree-sitter** parsing still optional; local **Python sentence-transformers** embeddings not bundled (remote `/embeddings` is the supported path).
+**Largest gaps vs “best in class”:** **distribution** (easy install for others), **CI**, **tree-sitter-level** structure (vs regex outline), **long-context** behavior (summarization / compaction), optional **C++** mmap (only if profiling proves Rust path is too slow).
+
+---
+
+## How to improve this roadmap (meta)
+
+Use the plan as a **decision log**, not a wishlist.
+
+1. **Lead with outcomes** — e.g. “New contributor can run `inari doctor` successfully in under five minutes” beats “add more docs” without a test.
+2. **Order by dependencies** — CI and a single documented **build matrix** unlock everything else; tree-sitter depends on agreeing on **per-language** scope.
+3. **Time horizons** — tag items **now (0–4 weeks)**, **next (1–3 months)**, **later (quarter+)** so the table stays honest.
+4. **Non-goals** — say what you will *not* do this year (see below); it prevents roadmap noise.
+5. **Measurable “done”** — each backlog row should have a **verifiable** completion (test, command, or doc section).
+
+---
 
 ## Goals
 
-Local CLI comparable to Claude Code / Qwen Code: **multi-turn chat**, **edits** with confirmations, **shell** with policy, **codebase-aware** tools — with disk/process work in **Rust**, not ad-hoc Node `fs`/`child_process`.
+Ship a **local**, **engine-sandboxed** CLI comparable to other coding agents: multi-turn chat, edits with confirmations, shell under policy, codebase-aware tools — with disk/process work in **Rust**, not ad-hoc Node `fs` / `child_process`.
+
+---
 
 ## Architecture
 
@@ -59,6 +84,7 @@ Local CLI comparable to Claude Code / Qwen Code: **multi-turn chat**, **edits** 
 flowchart LR
   subgraph driver [packages_cli_TS]
     REPL[REPL_chat]
+    TUI[TUI_Ink]
     Agent[Agent_loop]
     LLM[LLM_providers]
     Zod[Zod_tools]
@@ -68,11 +94,12 @@ flowchart LR
     IPC[inaricode_engine_ipc]
     FS[Fs_grep_patch_shell]
   end
-  subgraph later [Optional]
+  subgraph optional [Optional_paths]
     Py[Python_sidecar_BM25]
-    Cpp[C_plus_plus_hotpath]
+    Cpp[C++_mmap_hotpath]
   end
   REPL --> Agent
+  TUI --> Agent
   Agent --> LLM
   Agent --> Zod
   Zod --> IPC
@@ -82,95 +109,154 @@ flowchart LR
   FS -.-> Cpp
 ```
 
-**One turn:** user message → LLM (tools) → TS validates → **engine IPC** → tool results → LLM until stop or step limit.
+**One turn:** user message → LLM (tools) → TS validates → engine IPC (or sidecar/embeddings) → tool results → LLM until stop or step limit.
+
+---
 
 ## Stack
 
 | Layer | Choices |
 |-------|---------|
-| **TS** | Node 20+, strict TS, Commander, readline, Zod, Vitest, cosmiconfig, Yarn workspaces |
-| **LLM** | `@anthropic-ai/sdk`; `openai` package for Chat Completions + tools (OpenAI-compatible URLs) |
+| **TS** | Node 20+, strict TS, Commander, Zod, Vitest, cosmiconfig, Yarn workspaces, Ink + React (TUI) |
+| **LLM** | `@anthropic-ai/sdk`; `openai` for Chat Completions + tools (OpenAI-compatible URLs) |
 | **Rust** | clap, serde_json, ignore, regex, similar, diffy, tokio |
 
-**Provider IDs** (presets + env keys) live in **`ProviderIdSchema`** in [`config.ts`](../../packages/cli/src/config.ts) — includes e.g. `openai`, `kimi`, `qwen`, `ollama`, `egune`/`eguna`, `mongol_ai`, `custom`, etc. Override **`baseURL`** / **`model`** when vendor docs differ.
+**Provider IDs** live in **`ProviderIdSchema`** in [`config.ts`](../../packages/cli/src/config.ts). **Engine:** JSON line in/out; same payload to **`ipcRequest`** in [`@inaricode/engine-native`](../../packages/engine-native). **`INARI_ENGINE_IPC=subprocess`** forces subprocess; default **`auto`** prefers native when `.node` loads.
 
-**Engine contract:** one JSON object per stdin line; reply one JSON line — same payload is passed to **`ipcRequest`** in [`@inaricode/engine-native`](../../packages/engine-native). Use **`INARI_ENGINE_IPC=subprocess`** to force the `inaricode-engine` subprocess; default **`auto`** prefers native when the `.node` binding loads.
+**Grep / index:** `.gitignore` + **`.inariignore`**. **Sidecar:** JSON lines; `sidecar.enabled` + optional **`INARI_SIDECAR_CMD`**. **Semantic cache:** under **`.inaricode/`** (root `.gitignore`).
 
-**Grep** walks with **`.gitignore` + `.inariignore`** (gitignore-style rules via the `ignore` crate). **Sidecar:** one JSON line in/out per process; enable with **`sidecar: { enabled: true }`** in config, **`pip install -r packages/sidecar/requirements.txt`** (pathspec for `.inariignore`), optional **`INARI_SIDECAR_CMD`** / **`sidecar.command`**. **Semantic index:** **`globby`** + gitignore + `.inariignore` lines; cache under **`.inaricode/`** (gitignored in this repo’s root `.gitignore`).
+---
 
 ## Repo layout
 
 ```
 inaricode/
-  package.json              # workspaces, scripts (incl. build:native)
-  packages/cli/src/         # cli, config, llm/*, agent/*, tools/* (semantic-search, embeddings-api, symbol-outline), ui/*, session/*, engine/client.ts, policy/*
-  packages/engine/src/      # lib.rs (dispatch) + main.rs (ipc bin) + fs_ops, grep_ops, paths, process_ops
-  packages/engine-native/   # napi-rs crate + generated index.js / *.node (gitignore .node)
-  packages/sidecar/       # inari_sidecar.py (BM25 codebase_search) + requirements.txt
-  docs/plan/                # this file
+  package.json
+  packages/cli/src/     # cli, config, llm, agent, tools, ui, session, engine client, policy, i18n
+  packages/engine/
+  packages/engine-native/
+  packages/sidecar/
+  docs/plan/            # this file
 ```
+
+---
 
 ## Product scope
 
-| Theme | Implemented | Planned |
-|-------|-------------|---------|
-| Chat / history | REPL; `--session` JSON; `maxHistoryItems` trim | Long-thread summarization |
-| Edits | read/write/list/grep/search_replace/**apply_patch** (diffy) via engine | Stronger patch UX; multi-file patches |
-| Shell | `run_cmd` + caps + confirm; config **shell.denySubstrings** / **allowCommandPrefixes**; `readOnly` / `--read-only` | n/a |
-| Context | `--root`; grep + semantic index honor **.gitignore + .inariignore** | Local Python ST embeddings; C++ scan |
-| LLM | Multi-provider; **streaming** (Anthropic + OpenAI stream); `--no-stream` | n/a |
+| Theme | Implemented | Next (prioritized) |
+|-------|-------------|---------------------|
+| Chat / history | REPL, TUI, `--session`, `maxHistoryItems` | **Compaction / summarization** for long threads |
+| Edits | read/write/list/grep/search_replace/**apply_patch** | **Multi-file patch UX**, clearer conflict reporting |
+| Shell | `run_cmd` + policy + confirm | Hardening from real-world abuse patterns |
+| Context | `--root`; grep + semantic honor ignore files | **tree-sitter** `symbol_outline` (scoped languages first) |
+| LLM | Multi-provider, streaming, `--no-stream` | Retry/backoff policy; token budgeting (doc + optional flags) |
+| i18n | EN + MN across CLI surfaces | More strings as features land; contributor note in README |
+| Install | From source (`yarn build`) | **npm/binary story**, **CI**, documented **platform matrix** |
+
+---
 
 ## Security (baseline)
 
-- Confirm **write_file**, **search_replace**, **run_terminal_cmd** (unless `chat --yes`).
-- Tool outputs pass through **light redaction** (common API key shapes and `key=value` secrets); expand as needed.
-- Engine enforces paths under workspace (no `..` segments in rel paths).
+- Confirm **write_file**, **search_replace**, **run_terminal_cmd** unless `chat --yes`.
+- Tool output **redaction** before the model (`packages/cli/src/tools/redact.ts`); extend patterns as you learn leaks.
+- Engine enforces workspace path sandbox (no `..` in rel paths).
 
-## Phased delivery
+---
 
-### Phase 0 — Scaffold (**done**)
+## Prioritized backlog
 
-- Yarn workspaces: `packages/cli`, `packages/engine`
-- `inaricode-engine` + `ipc` JSON-line protocol (incl. `echo` / smoke path)
-- `inari` CLI: `init`, `doctor`, Vitest for engine wiring
+Rough order: each item unlocks or de-risks the next.
 
-### Phase 1 — MVP agent (**done**)
+| Priority | Horizon | Item | Done when |
+|----------|---------|------|-----------|
+| **P0** | Now | **CI** — [`../../.github/workflows/ci.yml`](../../.github/workflows/ci.yml): Vitest + `cargo test` on push/PR to `main` | Green checks on `main` (enable Actions in repo settings if needed) |
+| **P0** | Now | **Contributor quickstart** — exact Node/Yarn/Rust versions, `build:native` pitfalls | README + plan link; `inari doctor` succeeds on clean clone |
+| **P1** | Next | **Release path** — `inari` on PATH via `npm link` or published package; engine env vars documented | Install section has two supported flows |
+| **P1** | Next | **Profiling budget** — when to consider C++ (large-repo grep latency) | One doc section + optional benchmark script |
+| **P2** | Later | **tree-sitter** for `symbol_outline` (start with TS/JS or Rust only) | Tests on sample repos; fallback to regex |
+| **P2** | Later | **Thread summarization** — optional auto-compact over N turns | Config flag + deterministic behavior |
+| **P3** | Optional | **C++ mmap** via `cxx` | Only if P1 profiling justifies maintenance cost |
 
-- **`inari chat`** readline REPL; in-memory conversation history for the session
-- **LLM:** Anthropic Messages + **OpenAI-compatible** Chat Completions (presets in `config.ts`: OpenAI, Kimi, Qwen, Ollama, Groq, Together, Egune/Eguna, Mongol AI, `custom`, …)
-- **Agent loop:** tool rounds with `maxAgentSteps`; system prompt with workspace root
-- **Tools → engine:** `read_file`, `write_file`, `list_dir`, `grep`, `search_replace`, `run_terminal_cmd` via `engineRequest` / Zod
-- **Safety:** prompts for write/search_replace/shell unless `chat --yes`; small shell substring denylist
-- **Not in Phase 1:** token streaming, session persistence file, `apply_patch`, napi-rs, Ink TUI
+---
 
-### Phase 2 — Quality & parity (**done**)
+## Non-goals (near term)
 
-- **Done:** token **streaming** (Anthropic + OpenAI-compatible); **`--session`** JSON persistence; **`maxHistoryItems`**; **`apply_patch`** (Rust `diffy` + TS tool); **config `shell`** + **`readOnly`** / **`chat --read-only`**; **`--no-stream`**
-- **Phase 2b done:** **`@inaricode/engine-native`** (napi-rs **`ipcRequest`**); **`inari chat --tui`** (Ink + React)
+- Replacing the Rust engine with Node for file/shell operations.
+- Bundling local **sentence-transformers** (heavy deps); remote `/embeddings` remains the supported default unless you explicitly scope a “local embeddings” project.
+- Full IDE / LSP integration (separate product surface).
+- Supporting every LLM vendor without maintainer capacity — **document** how to use `custom` + `baseURL` instead.
 
-### Phase 3 — Intelligence baseline (**done**)
+---
 
-- **`.inariignore`** honored by **`grep`** (same semantics as `.gitignore` patterns via `ignore` crate).
-- **Tool output redaction** before results go to the model (`packages/cli/src/tools/redact.ts`).
-- **Python sidecar** [`packages/sidecar/inari_sidecar.py`](../../packages/sidecar/inari_sidecar.py): JSON line RPC, **`codebase_search`** (BM25, UTF-8 text files, size caps), optional **`pathspec`** for `.inariignore`; **`inari doctor`** pings when `sidecar.enabled`.
-- Config: **`sidecar: { enabled, command? }`**, env **`INARI_SIDECAR_CMD`**, **`INARI_PYTHON`**.
+## Risks & dependencies
 
-### Phase 3+ — Deep features (**partially done**)
+| Risk | Mitigation |
+|------|------------|
+| **engine-native** build friction on Windows / ARM | Document matrix; CI builds; optional subprocess-only path (`INARI_ENGINE_IPC=subprocess`) |
+| **API cost / leakage** | Redaction + docs on env keys; never log full tool payloads in prod |
+| **Scope creep** | Use **non-goals** and **P0/P1** table; defer tree-sitter until CI + install story is stable |
 
-- **Done:** **`semantic_codebase_search`** — OpenAI-compatible **`POST …/embeddings`**, cosine similarity, on-disk cache (`.inaricode/semantic-cache-v1.json`), **`embeddings: { enabled, model?, baseURL?, apiKey? }`** (Anthropic chat defaults to OpenAI embeddings URL + **`OPENAI_API_KEY`** unless overridden). **`symbol_outline`** heuristic for TS/JS, Python, Rust, Go.
-- **Still optional / backlog:** C++ mmap hot path behind Rust (**`cxx`**); **tree-sitter**-accurate AST outlines; **plugin hooks**; optional **sentence-transformers** inside the Python sidecar.
+---
 
-## Roadmap (short)
+## Phased delivery (historical)
+
+<details>
+<summary>Earlier phase notes (0–3+) — expanded detail</summary>
+
+### Phase 0 — Scaffold (done)
+
+Yarn workspaces, `inaricode-engine` JSON IPC, `init` / `doctor`, Vitest smoke.
+
+### Phase 1 — MVP (done)
+
+`inari chat` REPL, Anthropic + OpenAI-compatible presets, agent loop, engine tools, confirms, shell policy.
+
+### Phase 2 — Parity (done)
+
+Streaming, `--session`, `maxHistoryItems`, `apply_patch`, shell config + `readOnly`, `--no-stream`, napi-rs, Ink TUI.
+
+### Phase 3 — Intelligence (done)
+
+`.inariignore` for grep, redaction, Python BM25 sidecar, `inari doctor` sidecar ping.
+
+### Phase 3+ — Deep features (done / ongoing)
+
+Semantic search + cache, `symbol_outline` heuristics; backlog: tree-sitter, summarization, C++.
+
+</details>
+
+---
+
+## Roadmap snapshot
 
 | Phase | State |
 |-------|--------|
 | 0 Scaffold | Done |
 | 1 MVP agent | Done |
-| 2 Parity | Done (incl. 2b napi + Ink) |
-| 3 Intelligence | Done (inariignore + redact + Python BM25 search) |
-| 3+ Deep features | In progress (remote embeddings + outline shipped; cxx / tree-sitter / plugins backlog) |
+| 2 Parity (+ napi + TUI) | Done |
+| 3 Intelligence (+ sidecar + redact) | Done |
+| 3+ Semantic + outline | Shipped; **accuracy** = backlog |
+| **4 Distribution & quality** | **Active target** — CI, install story, profiling, then tree-sitter / summaries |
+| Optional | C++ mmap if justified |
+
+---
 
 ## Success criteria
 
-- User can complete a small coding task with **engine-backed** tools, **visible confirmations** for risky ops, and **bounded** file/command output.
-- Tool args validated in TS; engine errors returned as tool text for the model to correct.
+**Already met (MVP bar):** small coding task with engine-backed tools, confirmations for risky ops, bounded outputs, Zod validation, engine errors visible to the model.
+
+**Next bar (“v1 credible”):**
+
+- A new machine can follow **README + plan** and get a green **`inari doctor`** without maintainer hand-holding.
+- **CI** protects `main` from regressions in CLI tests and Rust tests.
+- Roadmap **P0/P1** rows have owners or dates (even rough) so progress is visible.
+
+---
+
+## Maintenance
+
+When you ship a major feature, update in one pass:
+
+1. This file — **At a glance** table + **Prioritized backlog** (move row to done or delete).
+2. Root [`README.md`](../../README.md) — features / commands if user-facing.
+3. [`docs/plan/README.md`](./README.md) — only if the entrypoint to the plan changes.

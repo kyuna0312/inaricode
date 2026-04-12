@@ -1,5 +1,7 @@
 # InariCode
 
+[![CI](https://github.com/kyuna0312/inaricode/actions/workflows/ci.yml/badge.svg)](https://github.com/kyuna0312/inaricode/actions/workflows/ci.yml)
+
 **InariCode** is a local AI coding assistant CLI: multi-turn **chat**, **tool use** (read/write/grep/patch/shell), and a **Rust engine** for sandboxed filesystem and process work. It speaks **Anthropic** and **OpenAI-compatible** APIs (Claude, ChatGPT, Kimi, Qwen, Ollama, etc.).
 
 ## Features
