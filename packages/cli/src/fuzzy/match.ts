@@ -3,6 +3,7 @@ export function fuzzyScore(pattern: string, candidate: string): number {
   const p = pattern.toLowerCase();
   const s = candidate.toLowerCase();
   if (p.length === 0) return 0;
+  if (p.length > s.length) return -1;  // Early rejection
   let pi = 0;
   let score = 0;
   let consecutive = 0;
@@ -23,8 +24,10 @@ export function fuzzyScore(pattern: string, candidate: string): number {
 }
 
 export function filterFuzzySorted(pattern: string, candidates: string[], limit = 500): string[] {
+  const minLen = pattern.length;
   const scored: { s: string; sc: number }[] = [];
   for (const c of candidates) {
+    if (c.length < minLen) continue;  // Pre-filter: skip too-short candidates
     const sc = fuzzyScore(pattern, c);
     if (sc >= 0) scored.push({ s: c, sc });
   }

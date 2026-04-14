@@ -1,3 +1,4 @@
+import https from "node:https";
 import Anthropic from "@anthropic-ai/sdk";
 import type {
   ContentBlockParam,
@@ -6,6 +7,9 @@ import type {
   Tool,
 } from "@anthropic-ai/sdk/resources/messages";
 import type { AgentHistoryItem, CompleteResult, InariToolDefinition, LLMProvider, NormalizedBlock } from "./types.js";
+import { withRetry } from "../utils/retry-executor.js";
+
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
 
 function toAnthropicTools(defs: InariToolDefinition[]): Tool[] {
   return defs.map((d) => ({
@@ -76,7 +80,7 @@ export class AnthropicProvider implements LLMProvider {
   private readonly model: string;
 
   constructor(apiKey: string, model: string) {
-    this.client = new Anthropic({ apiKey });
+    this.client = new Anthropic({ apiKey, httpAgent: httpsAgent });
     this.model = model;
   }
 
@@ -91,7 +95,30 @@ export class AnthropicProvider implements LLMProvider {
     const tools = toAnthropicTools(params.tools);
 
     if (params.onTextDelta) {
-      const stream = this.client.messages.stream(
+      const finalMsg = await withRetry(async () => {
+        const stream = this.client.messages.stream(
+          {
+            model: this.model,
+            max_tokens: 8192,
+            system: params.system,
+            messages,
+            tools: tools.length > 0 ? tools : undefined,
+          },
+          { signal: params.signal },
+        );
+        for await (const event of stream) {
+          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+            params.onTextDelta!(event.delta.text);
+          }
+        }
+        return stream.finalMessage();
+      });
+      const { stopReason, blocks } = messageToBlocks(finalMsg);
+      return { stopReason, blocks };
+    }
+
+    const resp = await withRetry(() =>
+      this.client.messages.create(
         {
           model: this.model,
           max_tokens: 8192,
@@ -100,26 +127,7 @@ export class AnthropicProvider implements LLMProvider {
           tools: tools.length > 0 ? tools : undefined,
         },
         { signal: params.signal },
-      );
-      for await (const event of stream) {
-        if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-          params.onTextDelta(event.delta.text);
-        }
-      }
-      const finalMsg = await stream.finalMessage();
-      const { stopReason, blocks } = messageToBlocks(finalMsg);
-      return { stopReason, blocks };
-    }
-
-    const resp = await this.client.messages.create(
-      {
-        model: this.model,
-        max_tokens: 8192,
-        system: params.system,
-        messages,
-        tools: tools.length > 0 ? tools : undefined,
-      },
-      { signal: params.signal },
+      ),
     );
 
     const { stopReason, blocks } = messageToBlocks(resp);

@@ -4,6 +4,8 @@ import type { ResolvedShellPolicy } from "../policy/shell.js";
 import type { EmbeddingClient } from "../tools/embeddings-api.js";
 import { inariJsonLog } from "../observability/json-log.js";
 import { buildSystemPrompt } from "./system-prompt.js";
+import { compactHistory } from "../session/context-compact.js";
+import { executeTool } from "../utils/concurrency-pool.js";
 
 function truncJson(s: string, max = 2_000): string {
   if (s.length <= max) return s;
@@ -57,6 +59,9 @@ export async function runAgentTurn(opts: AgentTurnOptions): Promise<AgentTurnRes
 
   while (steps < opts.maxSteps) {
     steps += 1;
+    // Compact history if approaching context limits
+    history = compactHistory(history, { maxChars: 180_000 });
+
     const onDelta =
       opts.streaming && opts.onTextDelta
         ? (chunk: string) => {
@@ -91,28 +96,35 @@ export async function runAgentTurn(opts: AgentTurnOptions): Promise<AgentTurnRes
     }
 
     const outputs: { id: string; content: string }[] = [];
-    for (const tu of toolUses) {
-      const output = await runEngineTool({
-        workspaceRoot: opts.workspaceRoot,
-        name: tu.name,
-        input: tu.input,
-        confirm: opts.confirm,
-        skipConfirm: opts.skipConfirm,
-        readOnly: opts.readOnly,
-        shellPolicy: opts.shellPolicy,
-        sidecarArgv: opts.sidecarArgv,
-        embeddingClient: opts.embeddingClient,
-        signal: opts.signal,
-      });
-      inariJsonLog({
-        event: "tool_result",
-        step: steps,
-        tool: tu.name,
-        input: truncJson(JSON.stringify(tu.input)),
-        output: truncJson(output),
-      });
-      outputs.push({ id: tu.id, content: output });
-    }
+    // Execute independent tool calls in parallel (concurrency-limited) for faster agent loops
+    const results = await Promise.all(
+      toolUses.map((tu) =>
+        executeTool(() =>
+          runEngineTool({
+            workspaceRoot: opts.workspaceRoot,
+            name: tu.name,
+            input: tu.input,
+            confirm: opts.confirm,
+            skipConfirm: opts.skipConfirm,
+            readOnly: opts.readOnly,
+            shellPolicy: opts.shellPolicy,
+            sidecarArgv: opts.sidecarArgv,
+            embeddingClient: opts.embeddingClient,
+            signal: opts.signal,
+          }).then((output) => {
+            inariJsonLog({
+              event: "tool_result",
+              step: steps,
+              tool: tu.name,
+              input: truncJson(JSON.stringify(tu.input)),
+              output: truncJson(output),
+            });
+            return { id: tu.id, content: output };
+          }),
+        ),
+      ),
+    );
+    outputs.push(...results);
 
     history = trimHistory([...history, { kind: "tool_outputs", outputs }], opts.maxHistoryItems);
   }

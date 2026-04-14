@@ -1,6 +1,10 @@
+import https from "node:https";
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
 import type { AgentHistoryItem, CompleteResult, InariToolDefinition, LLMProvider, NormalizedBlock } from "./types.js";
+import { withRetry } from "../utils/retry-executor.js";
+
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
 
 function toOpenAiTools(defs: InariToolDefinition[]): ChatCompletionTool[] {
   return defs.map((d) => ({
@@ -66,6 +70,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     this.client = new OpenAI({
       apiKey: opts.apiKey,
       baseURL: opts.baseURL,
+      httpAgent: httpsAgent,
     });
     this.model = opts.model;
   }
@@ -92,35 +97,38 @@ export class OpenAICompatibleProvider implements LLMProvider {
     };
 
     if (params.onTextDelta) {
-      const stream = await this.client.chat.completions.create(
-        { ...body, stream: true },
-        { signal: params.signal },
-      );
-      let finishReason: string | null = null;
-      let textAcc = "";
-      const toolAcc = new Map<number, { id: string; name: string; args: string }>();
-      for await (const chunk of stream) {
-        const ch = chunk.choices[0];
-        if (ch?.finish_reason) finishReason = ch.finish_reason;
-        const delta = ch?.delta;
-        if (delta?.content) {
-          textAcc += delta.content;
-          params.onTextDelta(delta.content);
-        }
-        if (delta?.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            const idx = tc.index ?? 0;
-            let row = toolAcc.get(idx);
-            if (!row) {
-              row = { id: "", name: "", args: "" };
-              toolAcc.set(idx, row);
+      const { finishReason, textAcc, toolAcc } = await withRetry(async () => {
+        const stream = await this.client.chat.completions.create(
+          { ...body, stream: true },
+          { signal: params.signal },
+        );
+        let finishReason: string | null = null;
+        let textAcc = "";
+        const toolAcc = new Map<number, { id: string; name: string; args: string }>();
+        for await (const chunk of stream) {
+          const ch = chunk.choices[0];
+          if (ch?.finish_reason) finishReason = ch.finish_reason;
+          const delta = ch?.delta;
+          if (delta?.content) {
+            textAcc += delta.content;
+            if (params.onTextDelta) params.onTextDelta(delta.content);
+          }
+          if (delta?.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index ?? 0;
+              let row = toolAcc.get(idx);
+              if (!row) {
+                row = { id: "", name: "", args: "" };
+                toolAcc.set(idx, row);
+              }
+              if (tc.id) row.id = tc.id;
+              if (tc.function?.name) row.name = tc.function.name;
+              if (tc.function?.arguments) row.args += tc.function.arguments;
             }
-            if (tc.id) row.id = tc.id;
-            if (tc.function?.name) row.name = tc.function.name;
-            if (tc.function?.arguments) row.args += tc.function.arguments;
           }
         }
-      }
+        return { finishReason, textAcc, toolAcc };
+      });
       const blocks: NormalizedBlock[] = [];
       if (textAcc) blocks.push({ type: "text", text: textAcc });
       const sorted = [...toolAcc.entries()].sort((a, b) => a[0] - b[0]);
@@ -142,7 +150,9 @@ export class OpenAICompatibleProvider implements LLMProvider {
       return { stopReason: finishReason, blocks };
     }
 
-    const resp = await this.client.chat.completions.create(body, { signal: params.signal });
+    const resp = await withRetry(() =>
+      this.client.chat.completions.create(body, { signal: params.signal }),
+    );
 
     const choice = resp.choices[0];
     const msg = choice?.message;

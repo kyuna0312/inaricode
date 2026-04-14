@@ -27,6 +27,7 @@ import { resolveWorkspaceRoot } from "./workspace-root.js";
 import { loadSkillPackPathsFromConfig } from "./skills/read-pack-config.js";
 import { resolveSkillsContext } from "./skills/resolve-context.js";
 import { knownChatToolNames } from "./llm/inari-tools.js";
+import { validateProductionEnv, printValidationResult } from "./utils/env-validator.js";
 
 const versionLine = cliVersionLine();
 
@@ -86,6 +87,18 @@ async function main(): Promise<void> {
     .action(async () => {
       process.stdout.write(inariLogoBannerFull(versionLine, locale));
       process.stdout.write(`${await engineVersionLine(locale)}\n`);
+
+      // Production environment validation
+      const envResult = validateProductionEnv();
+      if (envResult.warnings.length > 0 || envResult.errors.length > 0) {
+        process.stdout.write("\n");
+        printValidationResult(envResult);
+        process.stdout.write("\n");
+        if (envResult.errors.length > 0) {
+          process.exitCode = 1;
+        }
+      }
+
       let transport: string;
       try {
         transport = await resolveEngineTransport();
