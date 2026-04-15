@@ -4,6 +4,7 @@ import type {
   ContentBlockParam,
   Message,
   MessageParam,
+  TextBlockParam,
   Tool,
 } from "@anthropic-ai/sdk/resources/messages";
 import type { AgentHistoryItem, CompleteResult, InariToolDefinition, LLMProvider, NormalizedBlock } from "./types.js";
@@ -17,6 +18,23 @@ function toAnthropicTools(defs: InariToolDefinition[]): Tool[] {
     description: d.description,
     input_schema: d.input_schema as Tool["input_schema"],
   }));
+}
+
+/** Wrap system prompt in a single cached block (ephemeral, 5-min TTL). */
+function cachedSystem(text: string): TextBlockParam[] {
+  return [{ type: "text", text, cache_control: { type: "ephemeral" } }];
+}
+
+/**
+ * Mark the last tool with an ephemeral cache breakpoint.
+ * Anthropic caches everything up to and including the breakpoint, so placing it
+ * on the last tool caches the entire system + tools prefix on every agent step.
+ */
+function cachedTools(tools: Tool[]): Tool[] {
+  if (tools.length === 0) return tools;
+  return tools.map((t, i) =>
+    i === tools.length - 1 ? { ...t, cache_control: { type: "ephemeral" } } : t,
+  );
 }
 
 function historyToAnthropicMessages(history: AgentHistoryItem[]): MessageParam[] {
@@ -92,7 +110,8 @@ export class AnthropicProvider implements LLMProvider {
     signal?: AbortSignal;
   }): Promise<CompleteResult> {
     const messages = historyToAnthropicMessages(params.history);
-    const tools = toAnthropicTools(params.tools);
+    const tools = cachedTools(toAnthropicTools(params.tools));
+    const system = cachedSystem(params.system);
 
     if (params.onTextDelta) {
       const finalMsg = await withRetry(async () => {
@@ -100,7 +119,7 @@ export class AnthropicProvider implements LLMProvider {
           {
             model: this.model,
             max_tokens: 8192,
-            system: params.system,
+            system,
             messages,
             tools: tools.length > 0 ? tools : undefined,
           },
@@ -122,7 +141,7 @@ export class AnthropicProvider implements LLMProvider {
         {
           model: this.model,
           max_tokens: 8192,
-          system: params.system,
+          system,
           messages,
           tools: tools.length > 0 ? tools : undefined,
         },
