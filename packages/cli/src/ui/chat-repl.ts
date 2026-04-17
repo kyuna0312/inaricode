@@ -138,6 +138,8 @@ export async function runChatRepl(options: {
         },
         persistEmpty,
         slashHelpExtra,
+        provider,
+        summarization: cfg.summarization,
       });
       if (slash.kind === "exit") break;
       if (slash.kind === "again") continue;
@@ -172,6 +174,7 @@ export async function runChatRepl(options: {
             }
           : undefined,
         signal: options.signal,
+        summarization: cfg.summarization,
       });
       history = next;
       if (useStream) {

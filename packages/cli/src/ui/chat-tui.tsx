@@ -151,6 +151,8 @@ function ChatTuiInner(
         write: (s) => setTranscript((t) => t + s),
         persistEmpty,
         slashHelpExtra: props.slashHelpExtra,
+        provider: props.provider,
+        summarization: props.cfg.summarization,
       });
       if (slash.kind === "exit") {
         await persist(history);
@@ -190,6 +192,7 @@ function ChatTuiInner(
           streaming: props.useStream,
           onTextDelta: props.useStream ? (chunk: string) => setStreaming((s) => s + chunk) : undefined,
           signal: props.signal,
+          summarization: props.cfg.summarization,
         });
         setHistory(next);
         await persist(next);

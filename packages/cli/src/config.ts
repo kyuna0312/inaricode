@@ -176,6 +176,16 @@ const RawConfigSchema = z
         enabled: z.boolean().optional().default(false),
       })
       .optional(),
+    /** LLM-driven history summarization (replaces old turns before lossy compact). */
+    summarization: z
+      .object({
+        enabled: z.boolean().optional().default(false),
+        /** Char count above which summarization fires (default 120_000). */
+        threshold: z.number().int().positive().optional().default(120_000),
+        /** Recent user-led turns to keep unsummarized (default 4). */
+        keepRecentTurns: z.number().int().min(1).max(20).optional().default(4),
+      })
+      .optional(),
   })
   .superRefine((val, ctx) => {
     if (val.provider === "custom" && !val.baseURL) {
@@ -226,6 +236,11 @@ export type InariConfig = {
   /** Relative or absolute paths to skill pack dirs (skill.yaml + prompt). */
   skillPackPaths: string[];
   chatTheme: "default" | "soft" | "high_contrast";
+  summarization: {
+    enabled: boolean;
+    threshold: number;
+    keepRecentTurns: number;
+  };
 };
 
 export type InariInitConfigFormat = "yaml" | "cjs";
@@ -650,6 +665,11 @@ export function resolveConfigFromRaw(c: RawInariConfig): InariConfig {
       picker,
       skillPackPaths: skillPackPathsFromParsed(c),
       chatTheme: c.chatTheme,
+      summarization: {
+        enabled: c.summarization?.enabled ?? false,
+        threshold: c.summarization?.threshold ?? 120_000,
+        keepRecentTurns: c.summarization?.keepRecentTurns ?? 4,
+      },
     };
   }
 
@@ -688,6 +708,11 @@ export function resolveConfigFromRaw(c: RawInariConfig): InariConfig {
     picker,
     skillPackPaths: skillPackPathsFromParsed(c),
     chatTheme: c.chatTheme,
+    summarization: {
+      enabled: c.summarization?.enabled ?? false,
+      threshold: c.summarization?.threshold ?? 120_000,
+      keepRecentTurns: c.summarization?.keepRecentTurns ?? 4,
+    },
   };
 }
 

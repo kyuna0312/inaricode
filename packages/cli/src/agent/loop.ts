@@ -4,7 +4,7 @@ import type { ResolvedShellPolicy } from "../policy/shell.js";
 import type { EmbeddingClient } from "../tools/embeddings-api.js";
 import { inariJsonLog } from "../observability/json-log.js";
 import { buildSystemPrompt } from "./system-prompt.js";
-import { compactHistory } from "../session/context-compact.js";
+import { summarizeAndCompactHistory, type SummarizationConfig } from "../session/context-compact.js";
 import { executeTool } from "../utils/concurrency-pool.js";
 
 function truncJson(s: string, max = 2_000): string {
@@ -31,6 +31,8 @@ export type AgentTurnOptions = {
   streaming: boolean;
   onTextDelta?: (chunk: string) => void;
   signal?: AbortSignal;
+  /** LLM-driven context summarization config */
+  summarization: SummarizationConfig;
 };
 
 export type AgentTurnResult = {
@@ -60,7 +62,9 @@ export async function runAgentTurn(opts: AgentTurnOptions): Promise<AgentTurnRes
   while (steps < opts.maxSteps) {
     steps += 1;
     // Compact history if approaching context limits
-    history = compactHistory(history, { maxChars: 180_000 });
+    history = await summarizeAndCompactHistory(history, opts.provider, opts.summarization, {
+      maxChars: 180_000,
+    });
 
     const onDelta =
       opts.streaming && opts.onTextDelta
