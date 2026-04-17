@@ -147,7 +147,7 @@ Defaults: `enabled: true`, empty override maps (bundled defaults apply).
   - ≥ 95% → red
 - `INARI_PLAIN=1`: bar replaced with `[2%]`
 - Cost omitted (replaced with nothing) when model has no pricing entry
-- `tokenHints.enabled: false` → line not rendered at all
+- `tokenHints.enabled: false` → chrome line not rendered; `/tokens` command still works
 
 ### Placement
 
