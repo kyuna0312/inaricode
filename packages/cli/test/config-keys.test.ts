@@ -69,6 +69,45 @@ plugins:
     }
   });
 
+  it("loads summarization config with explicit values", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "inari-sum-"));
+    try {
+      vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+      writeFileSync(
+        join(dir, "inaricode.yaml"),
+        `provider: anthropic
+summarization:
+  enabled: true
+  threshold: 90000
+  keepRecentTurns: 3
+`,
+        "utf8",
+      );
+      const cfg = await loadConfig(dir);
+      expect(cfg.summarization).toEqual({
+        enabled: true,
+        threshold: 90000,
+        keepRecentTurns: 3,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("summarization defaults to disabled when omitted", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "inari-sum2-"));
+    try {
+      vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+      writeFileSync(join(dir, "inaricode.yaml"), `provider: anthropic\n`, "utf8");
+      const cfg = await loadConfig(dir);
+      expect(cfg.summarization.enabled).toBe(false);
+      expect(cfg.summarization.threshold).toBe(120_000);
+      expect(cfg.summarization.keepRecentTurns).toBe(4);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("resolves egune key when provider is eguna", async () => {
     const dir = mkdtempSync(join(tmpdir(), "inari-keys-"));
     try {
