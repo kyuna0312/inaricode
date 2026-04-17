@@ -190,6 +190,7 @@ function ChatTuiInner(
           streaming: props.useStream,
           onTextDelta: props.useStream ? (chunk: string) => setStreaming((s) => s + chunk) : undefined,
           signal: props.signal,
+          summarization: props.cfg.summarization,
         });
         setHistory(next);
         await persist(next);

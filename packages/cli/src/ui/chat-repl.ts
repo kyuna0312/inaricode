@@ -172,6 +172,7 @@ export async function runChatRepl(options: {
             }
           : undefined,
         signal: options.signal,
+        summarization: cfg.summarization,
       });
       history = next;
       if (useStream) {
