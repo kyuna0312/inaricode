@@ -151,6 +151,8 @@ function ChatTuiInner(
         write: (s) => setTranscript((t) => t + s),
         persistEmpty,
         slashHelpExtra: props.slashHelpExtra,
+        provider: props.provider,
+        summarization: props.cfg.summarization,
       });
       if (slash.kind === "exit") {
         await persist(history);

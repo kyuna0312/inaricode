@@ -74,6 +74,8 @@ const EN = {
   slashCompactNoop: "Nothing to compact — already at or below {keep} user turn(s).",
   slashCompactDone:
     "Compacted session: {before} → {after} history items (kept last {keep} user turns). Saved if --session.",
+  slashCompactSummarized:
+    "History summarized via LLM. Old turns replaced with summary. Saved if --session.",
   slashUnknown: "Unknown command: {cmd}  — try /help",
   confirmBlock: "\n[confirm: {title}]\n{body}\n",
   confirmPrompt: "Proceed? [y/N] ",
@@ -198,6 +200,8 @@ const MN: Record<keyof typeof EN, string> = {
   slashCompactNoop: "Нягтруулах зүйл алга — аль хэдийн {keep} эргэлт эсвэл түүнээс бага.",
   slashCompactDone:
     "Session нягтруулсан: {before} → {after} түүхийн мөр (--session бол хадгалагдсан). Сүүлийн {keep} хэрэглэгчийн эргэлт.",
+  slashCompactSummarized:
+    "Түүх LLM-ээр нягтруулсан. Хуучин эргэлтийг хураангуйгаар солилоо. --session бол хадгалагдсан.",
   slashUnknown: "Танигдаагүй тушаал: {cmd}  — /help үзнэ үү",
   confirmBlock: "\n[баталгаа: {title}]\n{body}\n",
   confirmPrompt: "Үргэлжлүүлэх үү? [т/г] (эсвэл y/n) ",

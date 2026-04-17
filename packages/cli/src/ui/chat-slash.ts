@@ -1,6 +1,7 @@
-import type { AgentHistoryItem } from "../llm/types.js";
+import type { AgentHistoryItem, LLMProvider } from "../llm/types.js";
 import type { Locale } from "../i18n/locale.js";
 import { compactHistoryByUserTurns } from "../session/compact-history.js";
+import { summarizeHistory } from "../session/summarize-history.js";
 import { tr } from "../i18n/strings.js";
 
 export type SlashLoopAction =
@@ -21,6 +22,9 @@ type SlashCtx = {
   persistEmpty: () => Promise<void>;
   /** Appended after built-in /help (e.g. skill pack slash_hints). */
   slashHelpExtra?: string;
+  /** Required for /compact summary. */
+  provider: LLMProvider;
+  summarization: { enabled: boolean; threshold: number; keepRecentTurns: number };
 };
 
 /**
@@ -71,6 +75,19 @@ export async function handleChatSlashInput(ctx: SlashCtx): Promise<SlashLoopActi
 
   if (cmd === "compact" || cmd === "trim") {
     const rest = raw.slice(cmd.length).trim();
+
+    if (rest === "summary") {
+      const history = ctx.getHistory();
+      const summarized = await summarizeHistory(history, {
+        provider: ctx.provider,
+        keepRecentTurns: ctx.summarization.keepRecentTurns,
+      });
+      ctx.setHistory(summarized);
+      await ctx.persistHistory(summarized);
+      await ctx.write(`${tr(ctx.locale, "slashCompactSummarized")}\n`);
+      return { kind: "again" };
+    }
+
     let keep = 8;
     if (rest.length > 0) {
       const n = parseInt(rest, 10);
