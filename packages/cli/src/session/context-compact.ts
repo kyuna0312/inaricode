@@ -1,6 +1,15 @@
 /** Context compaction: intelligently trim conversation history to stay within provider limits. */
 
-import type { AgentHistoryItem, NormalizedBlock } from "../llm/types.js";
+import type { AgentHistoryItem, LLMProvider, NormalizedBlock } from "../llm/types.js";
+import { summarizeHistory } from "./summarize-history.js";
+
+export type SummarizationConfig = {
+  enabled: boolean;
+  /** Char count threshold above which summarization fires (default: 120_000) */
+  threshold: number;
+  /** Recent user-led turns to keep unsummarized (default: 4) */
+  keepRecentTurns: number;
+};
 
 export type CompactionOptions = {
   /** Maximum total characters in history (default: 200_000) */
@@ -114,4 +123,26 @@ export function compactHistory(history: AgentHistoryItem[], opts: CompactionOpti
   }
 
   return result;
+}
+
+/**
+ * Summarize old turns with the LLM when over threshold, then run synchronous
+ * compaction as a safety net.
+ */
+export async function summarizeAndCompactHistory(
+  history: AgentHistoryItem[],
+  provider: LLMProvider,
+  summarization: SummarizationConfig,
+  compactOpts: CompactionOptions = {},
+): Promise<AgentHistoryItem[]> {
+  let current = history;
+
+  if (summarization.enabled && countChars(current) > summarization.threshold) {
+    current = await summarizeHistory(current, {
+      provider,
+      keepRecentTurns: summarization.keepRecentTurns,
+    });
+  }
+
+  return compactHistory(current, compactOpts);
 }
