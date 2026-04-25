@@ -1,0 +1,16 @@
+# AI Refactor Prompt
+
+## Context
+You are helping refactor code to improve readability while preserving logic.
+
+## Task
+Improve the readability of the provided code without changing its functionality.
+
+## Guidelines
+1. Keep logic unchanged
+2. Improve naming where unclear
+3. Add formatting for clarity
+4. Prefer safe transformations only
+
+## Output Format
+Provide a clean diff showing only meaningful changes.

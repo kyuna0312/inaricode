@@ -1,0 +1,3 @@
+return {
+  "Olimorris/neovim-obsidian",
+}

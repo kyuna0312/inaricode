@@ -1,0 +1,24 @@
+name: debug
+description: Debug workspace with logs and terminal
+
+steps:
+  - name: start_debug_session
+    command: tmux new-session -d -s inari-debug
+    description: Create debug tmux session
+
+  - name: show_logs
+    command: tmux send-keys -t inari-debug "tail -f logs/*.log 2>/dev/null" C-m
+    description: Stream logs in first pane
+
+  - name: open_terminal
+    command: tmux split-window -h -t inari-debug
+    description: Open terminal in second pane
+
+  - name: open_nvim
+    command: tmux split-window -v -t inari-debug.1 && tmux send-keys -t inari-debug.2 "nvim" C-m
+    description: Open nvim in third pane
+
+ai_usage_points:
+  - trigger: error_fix
+    tool: opencode fix
+    prompt_file: core/ai/prompts/fix.prompt

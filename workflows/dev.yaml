@@ -1,0 +1,29 @@
+name: dev
+description: Start development workspace with tmux
+
+steps:
+  - name: start_tmux
+    command: tmux new-session -d -s inari-dev
+    description: Create tmux dev session
+
+  - name: open_nvim
+    command: tmux send-keys -t inari-dev "nvim" C-m
+    description: Open nvim in first pane
+
+  - name: open_ai
+    command: tmux split-window -h -t inari-dev && tmux send-keys -t inari-dev.1 "opencode" C-m
+    description: Open OpenCode in second pane
+
+  - name: dev_server
+    command: tmux split-window -v -t inari-dev.1 && tmux send-keys -t inari-dev.2 "npm run dev" C-m
+    description: Start dev server in third pane
+
+  - name: test_runner
+    command: tmux split-window -v -t inari-dev.0 && tmux send-keys -t inari-dev.3 "npm test --watch" C-m
+    description: Start test watcher in fourth pane
+
+ai_usage_points:
+  - trigger: code_generation
+    tool: opencode generate
+  - trigger: refactoring
+    tool: opencode refactor

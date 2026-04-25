@@ -1,0 +1,20 @@
+name: refactor
+description: AI-assisted refactoring workflow
+
+steps:
+  - name: select_code
+    command: echo "Select code in nvim and press <leader>ar"
+    description: Select code to refactor
+
+  - name: ai_refactor
+    command: opencode refactor
+    description: Run AI refactor on selection
+
+  - name: review_diff
+    command: git diff
+    description: Review changes before applying
+
+ai_usage_points:
+  - trigger: refactor_code
+    tool: opencode refactor
+    prompt_file: core/ai/prompts/refactor.prompt

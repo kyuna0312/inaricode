@@ -1,0 +1,15 @@
+# AI Fix Prompt
+
+## Context
+You are helping detect and fix bugs in code.
+
+## Task
+Analyze the error and provide a fix.
+
+## Guidelines
+1. Identify the root cause
+2. Provide minimal fix
+3. Explain briefly
+
+## Output Format
+Provide the fixed code with a brief explanation.
