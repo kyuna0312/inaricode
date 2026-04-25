@@ -59,7 +59,7 @@ install() {
     
     log_info "Installing to ${INSTALL_DIR}..."
     rm -rf "${INSTALL_DIR}"
-    mkdir -p "${INSTALL_DIR}"/{cli,core/{tmux,nvim/lua/plugins,ai/prompts},workflows,.memory/{bugs,refactors,sessions},docs}
+    mkdir -p "${INSTALL_DIR}"/{cli,core/{tmux,nvim/lua/plugins,ai/prompts,workflow},workflows,.memory/{bugs,refactors,sessions},docs}
     
     # Create tmux scripts
     cat > "${INSTALL_DIR}/core/tmux/dev.sh" <<'DEV'
@@ -266,15 +266,98 @@ AI
     echo -e "# Fix\nDetect and fix bugs.\nExplain briefly." > "${INSTALL_DIR}/core/ai/prompts/fix.prompt"
     echo -e "# Generate\nGenerate code from description.\nUse safe patterns." > "${INSTALL_DIR}/core/ai/prompts/generate.prompt"
 
+    # Create workflow scripts
+    cat > "${INSTALL_DIR}/core/workflow/parse.sh" <<'PARSER'
+#!/usr/bin/env bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKFLOW_DIR="${SCRIPT_DIR}/../../workflows"
+USER_WORKFLOW_DIR="${HOME}/.inari-code/workflows"
+parse_yaml_value() {
+    local file="$1"
+    local key="$2"
+    grep "^${key}:" "$file" | head -1 | sed 's/^[^:]*: *//' | sed 's/^"//' | sed 's/"$//'
+}
+find_workflow_file() {
+    local wf=""
+    if [[ -f "${USER_WORKFLOW_DIR}/${1}.yaml" ]]; then
+        wf="${USER_WORKFLOW_DIR}/${1}.yaml"
+    elif [[ -f "${WORKFLOW_DIR}/${1}.yaml" ]]; then
+        wf="${WORKFLOW_DIR}/${1}.yaml"
+    fi
+    echo "$wf"
+}
+list_workflows() {
+    for wf in "${USER_WORKFLOW_DIR}"/*.yaml "${WORKFLOW_DIR}"/*.yaml; do
+        [[ -f "$wf" ]] && basename "$wf" .yaml
+    done | sort -u
+}
+case "${1:-}" in
+    list) list_workflows ;;
+    find) find_workflow_file "$2" ;;
+    *) ;;
+esac
+PARSER
+
+    cat > "${INSTALL_DIR}/core/workflow/execute.sh" <<'EXEC'
+#!/usr/bin/env bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PARSER="${SCRIPT_DIR}/parse.sh"
+log_info() { echo "[INFO] $1"; }
+log_ok() { echo "[OK] $1"; }
+log_err() { echo "[ERR] $1" >&2; }
+execute_workflow() {
+    local workflow="$1"
+    local wf_file
+    wf_file=$("$PARSER" find "$workflow")
+    if [[ -z "$wf_file" ]]; then
+        log_err "Workflow not found: $workflow"
+        return 1
+    fi
+    log_info "Running workflow: $workflow"
+    local steps
+    steps=$(grep -E '^  - name:' "$wf_file" | sed 's/.*name: //')
+    local cmds
+    cmds=$(grep -E '^    command:' "$wf_file" | sed 's/.*command: //')
+    local s_arr=()
+    while IFS= read -r l; do
+        [[ -n "$l" ]] && s_arr+=("$l")
+    done <<< "$steps"
+    local c_arr=()
+    while IFS= read -r l; do
+        [[ -n "$l" ]] && c_arr+=("$l")
+    done <<< "$cmds"
+    local i=0
+    for step in "${s_arr[@]}"; do
+        echo "[STEP] $step"
+        eval "${c_arr[$i]}" || { log_err "Step failed: $step"; return 1; }
+        log_ok "Step completed: $step"
+        ((i++))
+    done
+    log_ok "Workflow completed!"
+}
+case "${1:-}" in
+    run) shift; execute_workflow "$@" ;;
+    list) "$PARSER" list ;;
+esac
+EXEC
+
+    chmod +x "${INSTALL_DIR}/core/workflow/"*.sh
+
     # Create workflows
     cat > "${INSTALL_DIR}/workflows/dev.yaml" <<'WF1'
 name: dev
-description: Development workflow
+description: Start development workspace with tmux
 steps:
   - name: start_tmux
-    command: tmux new-session -d -s inari-dev
+    command: tmux new-session -d -s inari-dev 2>/dev/null || tmux attach -t inari-dev
   - name: open_nvim
     command: tmux send-keys -t inari-dev "nvim" C-m
+  - name: open_ai
+    command: tmux split-window -h -t inari-dev && tmux send-keys -t inari-dev.1 "opencode" C-m
+  - name: dev_server
+    command: tmux split-window -v -t inari-dev.1 && tmux send-keys -t inari-dev.2 "npm run dev" C-m
+  - name: test_runner
+    command: tmux split-window -v -t inari-dev.0 && tmux send-keys -t inari-dev.3 "npm test --watch" C-m
 WF1
 
     cat > "${INSTALL_DIR}/workflows/refactor.yaml" <<'WF2'
@@ -293,7 +376,7 @@ steps:
 WF3
 
     # Make executable
-    chmod +x "${INSTALL_DIR}/cli/inari" "${INSTALL_DIR}/core/tmux/"*.sh "${INSTALL_DIR}/core/ai/ai.sh"
+    chmod +x "${INSTALL_DIR}/cli/inari" "${INSTALL_DIR}/core/tmux/"*.sh "${INSTALL_DIR}/core/ai/ai.sh" "${INSTALL_DIR}/core/workflow/"*.sh
 
     # Create symlinks
     mkdir -p "${HOME}/bin"

@@ -4,6 +4,7 @@
 INARI_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_DIR="$INARI_ROOT/core/tmux"
 AI_SCRIPT="$INARI_ROOT/core/ai/ai.sh"
+WORKFLOW_EXEC="$INARI_ROOT/core/workflow/execute.sh"
 
 show_help() {
     cat <<EOF
@@ -14,6 +15,9 @@ Usage: inari <command>
 Commands:
     dev         Start development workspace
     debug       Start debug workspace
+    run         Run a workflow
+    list        List available workflows
+    workflow    Show workflow details
     refactor    Run AI refactor on input
     fix         Run AI fix on input
     generate    Generate code with AI
@@ -21,7 +25,8 @@ Commands:
 
 Examples:
     inari dev              # Start dev session
-    inari debug            # Start debug session
+    inari run dev          # Run dev workflow
+    inari list             # List workflows
     inari refactor "code"  # Refactor code
     inari fix "error"      # Fix error
 
@@ -34,6 +39,25 @@ case "${1:-help}" in
         ;;
     debug)
         "$SCRIPT_DIR/debug.sh" start
+        ;;
+    run)
+        shift
+        "$WORKFLOW_EXEC" run "$@"
+        ;;
+    list)
+        "$WORKFLOW_EXEC" list
+        ;;
+    workflow)
+        shift
+        if [[ "$1" == "validate" ]]; then
+            shift
+            "$WORKFLOW_EXEC" validate "$@"
+        elif [[ "$1" == "show" ]]; then
+            shift
+            "$WORKFLOW_EXEC" show "$@"
+        else
+            "$WORKFLOW_EXEC" show "$@"
+        fi
         ;;
     refactor)
         shift
