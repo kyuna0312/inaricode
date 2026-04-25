@@ -34,6 +34,7 @@ yarn workspace @inaricode/cli test -- test/config-keys.test.ts
 # Full pre-PR gate
 yarn verify                  # lint + build + test (@inaricode/cli)
 yarn verify:all              # + cargo test + npm pack --dry-run
+yarn pack:check              # list files that would ship in @inaricode/cli
 ```
 
 ## Architecture
@@ -68,6 +69,8 @@ Non-workspace packages (not in Yarn graph):
 | `fuzzy/` | Fuzzy file picker (builtin or fzf) |
 | `mcp/` | Stdio MCP server |
 | `observability/` | `INARI_LOG=json` structured logging |
+| `media/` | Hugging Face text-to-image (`inari media`) |
+| `utils/` | Shared helpers: `concurrency-pool.ts`, `retry-executor.ts`, `env-validator.ts`, `config-cache.ts` |
 
 ### Data flow
 
@@ -94,6 +97,14 @@ API keys: `keys.<provider>` in YAML, or env vars (`ANTHROPIC_API_KEY`, `OPENAI_A
 - Avoid non-null assertions (`!`); prefer `?.` / `??` and type narrowing
 - Unused parameters: prefix with `_`
 
+## Python sidecar (optional)
+
+`packages/sidecar/inari_sidecar.py` — BM25 `codebase_search`. Enable: `pip install -r packages/sidecar/requirements.txt`. `inari doctor` reports sidecar status.
+
+## Version line
+
+`packages/cli/package.json` → `version` is semver. Flower codename: optional `"inaricode": { "codename": "Sakura" }` in that file; if absent, `src/release-flowers.ts` derives it deterministically from the version. `inari --version` and chat headers use `cliVersionLine()`: `vX.Y.Z · patch N · FlowerName`.
+
 ## Rust engine
 
 - Source: `packages/engine/` (separate Cargo workspace)
@@ -116,6 +127,7 @@ API keys: `keys.<provider>` in YAML, or env vars (`ANTHROPIC_API_KEY`, `OPENAI_A
 
 ## Important constraints
 
+- `.inariignore` at repo root excludes paths from `grep` tool results (like `.gitignore` but for the agent)
 - Do **not** copy code from `kyuna0312/claude-code` or other external agent CLIs into this repo — architecture lessons only
 - Do **not** commit `tsc` output under `packages/cli/test/`; compiled output lives in `dist/`
 - Lint has `--max-warnings 0`; keep ESLint clean
